@@ -67,6 +67,7 @@ static void MX_TIM16_Init(void);
 
 uint32_t getRuntimeMs(void);
 uint32_t getRuntimeMsDiff(uint32_t startTime);
+void readDaisyChainSID(void);
 
 /* USER CODE END PFP */
 
@@ -128,7 +129,7 @@ int main(void)
 
 //    AD68_NS::adBms6830_init_config(TOTAL_IC, AD68_NS::IC);
 
-    AD29_NS::adi2950_init_config(TOTAL_IC, AD29_NS::IC);
+//    AD29_NS::adi2950_init_config(TOTAL_IC, AD29_NS::IC);
 
     HAL_TIM_Base_Start_IT(&htim16);
 
@@ -149,7 +150,8 @@ int main(void)
 //        HAL_Delay(1);
 //        AD68_NS::adBms6830_read_cell_voltages(TOTAL_IC, AD68_NS::IC);
 
-        AD29_NS::adi2950_read_device_sid(TOTAL_IC, AD29_NS::IC);
+//        AD29_NS::adi2950_read_device_sid(TOTAL_IC, AD29_NS::IC);
+        readDaisyChainSID();
 
 
         timeDiff = getRuntimeMsDiff(timeStart);
@@ -496,6 +498,43 @@ uint32_t getRuntimeMsDiff(uint32_t startTime)
 {
     return HAL_GetTick() - startTime; // Divide 10 to get 10ms
 }
+
+
+#include "adbms_mcuWrapper.h"
+#include "adbms_cmdlist.h"
+#include "adbms_utility.h"
+
+
+void readDaisyChainSID(void)
+{
+    const uint8_t nIC = 2;
+    const uint8_t RX_DATA = 8;
+
+    adBmsWakeupIc(2);
+
+    // AD29_NS::adBmsReadData(tIC, &ic[0], RDSID, SID, NONE);
+
+    uint16_t rBuff_size = nIC * RX_DATA;
+    uint8_t regData_size = RX_DATA;
+
+    uint8_t read_buffer[rBuff_size];
+    uint8_t pec_error[nIC];
+    uint8_t cmd_count[nIC];
+
+    spiReadData(nIC, RDSID, read_buffer, pec_error, cmd_count, regData_size);
+
+    for(int i = 0; i < nIC; i++)
+    {
+        printf("IC%d SID: \n", i);
+        for(int j = 0; j < RX_DATA - 2; j++)
+        {
+            printf("0x%02X, ", read_buffer[j + i*RX_DATA]);
+        }
+        printf("pecError: %d, commandCounter: %d \n", pec_error[i], pec_error[i]);
+    }
+
+}
+
 
 
 /* USER CODE END 4 */
