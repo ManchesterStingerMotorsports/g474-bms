@@ -65,15 +65,16 @@ static void MX_TIM2_Init(void);
 static void MX_TIM16_Init(void);
 /* USER CODE BEGIN PFP */
 
+uint32_t getRuntimeMs(void);
+uint32_t getRuntimeMsDiff(uint32_t startTime);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
 //constexpr uint8_t TOTAL_IC = 1;
-
 volatile uint32_t runtime_sec = 0;
-uint32_t timeDiff = 0;
 
 /* USER CODE END 0 */
 
@@ -120,38 +121,42 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 
 
-
     // Set CS2 Pin to HIGH to disable second SPI on 6822 + MSTR should be high by default
     HAL_GPIO_WritePin(BMS_CS2_GPIO_Port, BMS_CS2_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(BMS_MSTR_GPIO_Port, BMS_MSTR_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(BMS_MSTR2_GPIO_Port, BMS_MSTR2_Pin, GPIO_PIN_SET);
 
+//    AD68_NS::adBms6830_init_config(TOTAL_IC, AD68_NS::IC);
 
-    AD68_NS::adBms6830_init_config(TOTAL_IC, AD68_NS::IC);
-
-//    AD29_NS::adi2950_init_config(TOTAL_IC, AD29_NS::IC);
+    AD29_NS::adi2950_init_config(TOTAL_IC, AD29_NS::IC);
 
     HAL_TIM_Base_Start_IT(&htim16);
 
     char message[50];
 
+    uint32_t timeDiff = 0;
+    uint32_t timeStart;
+
+    printf("Start Program \n\n");
+
     while (1)
     {
 
-        HAL_Delay(1000);
+        timeStart = getRuntimeMs();
 
-        printf("\n");
-        sprintf(message, "Runtime: %ld.%ld s, TimeDiff: %ld \n", runtime_sec, __HAL_TIM_GET_COUNTER(&htim16), timeDiff);
 
-        uint16_t timeStart = __HAL_TIM_GET_COUNTER(&htim16);
+//        AD68_NS::adBms6830_start_adc_cell_voltage_measurment(TOTAL_IC);
+//        HAL_Delay(1);
+//        AD68_NS::adBms6830_read_cell_voltages(TOTAL_IC, AD68_NS::IC);
 
+        AD29_NS::adi2950_read_device_sid(TOTAL_IC, AD29_NS::IC);
+
+
+        timeDiff = getRuntimeMsDiff(timeStart);
+        sprintf(message, "Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
         HAL_UART_Transmit(&hlpuart1, (uint8_t*)message, strlen(message), HAL_MAX_DELAY);
 
-        AD68_NS::adBms6830_start_adc_cell_voltage_measurment(TOTAL_IC);
-        HAL_Delay(10);
-        AD68_NS::adBms6830_read_cell_voltages(TOTAL_IC, AD68_NS::IC);
-
-        timeDiff = (__HAL_TIM_GET_COUNTER(&htim16) - timeStart) / 10;
+        HAL_Delay(1000);
 
     /* USER CODE END WHILE */
 
@@ -481,6 +486,16 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   }
 }
 
+
+uint32_t getRuntimeMs(void)
+{
+    return HAL_GetTick();
+}
+
+uint32_t getRuntimeMsDiff(uint32_t startTime)
+{
+    return HAL_GetTick() - startTime; // Divide 10 to get 10ms
+}
 
 
 /* USER CODE END 4 */
