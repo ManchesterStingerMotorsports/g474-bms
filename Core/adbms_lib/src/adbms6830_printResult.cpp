@@ -208,7 +208,7 @@ namespace AD68_NS
     else if (type == RAux){channel = RAUX;}
     for(uint8_t ic = 0; ic < tIC; ic++)
     {
-      printf("IC%d:",(ic+1));
+      printf("IC%d:\n",(ic+1));
       for(uint8_t index = 0; index < channel; index++)
       {
         if(type == Cell){ temp = IC[ic].cell.c_codes[index]; }
@@ -220,7 +220,7 @@ namespace AD68_NS
         voltage = getVoltage(temp);
         if(type == Cell)
         {
-          printf("C%d=%fV,",(index+1), voltage);
+          printf("C%2d=%fV,\n",(index+1), voltage);
           if(index == (channel-1))
           {
             printf("CCount:%d,",IC[ic].cccrc.cmd_cntr);
@@ -229,7 +229,7 @@ namespace AD68_NS
         }
         else if(type == AvgCell)
         {
-          printf("AC%d=%fV,",(index+1), voltage);
+          printf("AC%2d=%fV,\n",(index+1), voltage);
           if(index == (channel-1))
           {
             printf("CCount:%d,",IC[ic].cccrc.cmd_cntr);
@@ -238,7 +238,7 @@ namespace AD68_NS
         }
         else if(type == F_volt)
         {
-          printf("FC%d=%fV,",(index+1), voltage);
+          printf("FC%2d=%fV,\n",(index+1), voltage);
           if(index == (channel-1))
           {
             printf("CCount:%d,",IC[ic].cccrc.cmd_cntr);
@@ -247,7 +247,7 @@ namespace AD68_NS
         }
         else if(type == S_volt)
         {
-          printf("S%d=%fV,",(index+1), voltage);
+          printf("S%2d=%fV,\n",(index+1), voltage);
           if(index == (channel-1))
           {
             printf("CCount:%d,",IC[ic].cccrc.cmd_cntr);
@@ -258,22 +258,22 @@ namespace AD68_NS
         {
           if(index <= 9)
           {
-            printf("AUX%d=%fV,",(index+1), voltage);
+            printf("AUX%2d=%fV,\n",(index+1), voltage);
           }
           else if(index == 10)
           {
-            printf("VMV:%fV,",(20 * voltage));
+            printf("VMV:%2fV,\n",(20 * voltage));
           }
           else if(index == 11)
           {
-            printf("V+:%fV,",(20 * voltage));
+            printf("V+:%fV,\n",(20 * voltage));
             printf("CCount:%d,",IC[ic].cccrc.cmd_cntr);
             printf("PECError:%d",IC[ic].cccrc.aux_pec);
           }
         }
         else if(type == RAux)
         {
-          printf("RAUX%d=%fV,",(index+1), voltage);
+          printf("RAUX%d=%2fV,\n",(index+1), voltage);
           if(index == (channel-1))
           {
             printf("CCount:%d,",IC[ic].cccrc.cmd_cntr);
@@ -984,7 +984,7 @@ namespace AD68_NS
   */
   void printPollAdcConvTime(int count)
   {
-    printf("Adc Conversion Time = %fms\n", (float)(count/64000.0));
+    printf("Adc Conversion Time = %d us\n", count); // Changed original to display us instead
   }
 
   /**

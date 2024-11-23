@@ -50,6 +50,7 @@ UART_HandleTypeDef hlpuart1;
 SPI_HandleTypeDef hspi1;
 
 TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim16;
 
 /* USER CODE BEGIN PV */
 
@@ -61,6 +62,7 @@ static void MX_GPIO_Init(void);
 static void MX_LPUART1_UART_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM2_Init(void);
+static void MX_TIM16_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -68,6 +70,10 @@ static void MX_TIM2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+//constexpr uint8_t TOTAL_IC = 1;
+
+volatile uint32_t runtime_sec = 0;
+uint32_t timeDiff = 0;
 
 /* USER CODE END 0 */
 
@@ -105,6 +111,7 @@ int main(void)
   MX_LPUART1_UART_Init();
   MX_SPI1_Init();
   MX_TIM2_Init();
+  MX_TIM16_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -122,31 +129,29 @@ int main(void)
 
     AD68_NS::adBms6830_init_config(TOTAL_IC, AD68_NS::IC);
 
+//    AD29_NS::adi2950_init_config(TOTAL_IC, AD29_NS::IC);
+
+    HAL_TIM_Base_Start_IT(&htim16);
+
+    char message[50];
 
     while (1)
     {
 
-        HAL_Delay(500);
+        HAL_Delay(1000);
 
-        const char* message = "bruh \n";
+        printf("\n");
+        sprintf(message, "Runtime: %ld.%ld s, TimeDiff: %ld \n", runtime_sec, __HAL_TIM_GET_COUNTER(&htim16), timeDiff);
 
-        printf("SWO test!\r\n");
+        uint16_t timeStart = __HAL_TIM_GET_COUNTER(&htim16);
+
         HAL_UART_Transmit(&hlpuart1, (uint8_t*)message, strlen(message), HAL_MAX_DELAY);
-
-
-
-
 
         AD68_NS::adBms6830_start_adc_cell_voltage_measurment(TOTAL_IC);
         HAL_Delay(10);
         AD68_NS::adBms6830_read_cell_voltages(TOTAL_IC, AD68_NS::IC);
 
-
-
-
-
-
-
+        timeDiff = (__HAL_TIM_GET_COUNTER(&htim16) - timeStart) / 10;
 
     /* USER CODE END WHILE */
 
@@ -307,7 +312,7 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 17000-1;
+  htim2.Init.Prescaler = 170-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim2.Init.Period = 4294967295;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -330,6 +335,38 @@ static void MX_TIM2_Init(void)
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM16 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM16_Init(void)
+{
+
+  /* USER CODE BEGIN TIM16_Init 0 */
+
+  /* USER CODE END TIM16_Init 0 */
+
+  /* USER CODE BEGIN TIM16_Init 1 */
+
+  /* USER CODE END TIM16_Init 1 */
+  htim16.Instance = TIM16;
+  htim16.Init.Prescaler = 17000 - 1;
+  htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim16.Init.Period = 9999;
+  htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim16.Init.RepetitionCounter = 0;
+  htim16.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim16) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM16_Init 2 */
+
+  /* USER CODE END TIM16_Init 2 */
 
 }
 
@@ -408,6 +445,7 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+/// printf and scanf compatibility code ///
 
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 #define GETCHAR_PROTOTYPE int __io_getchar(void)
@@ -428,6 +466,19 @@ extern "C"
         HAL_UART_Receive(&hlpuart1, (uint8_t *)(&ch), 1, HAL_MAX_DELAY);
         return (int)ch;
     }
+}
+
+
+/// Timer interrupt callback
+
+// Callback: timer has rolled over
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  // Check which version of the timer triggered this callback and toggle LED
+  if (htim == &htim16)
+  {
+    runtime_sec += 1;
+  }
 }
 
 

@@ -204,7 +204,7 @@ void stopTimer()
 uint32_t getTimCount()
 {   
   uint32_t count = 0;
-  count = __HAL_TIM_GetCounter(htim);
+  count = __HAL_TIM_GetCounter(htim) / 10; // To compensate that the timer is running at 10kHz instead of the expected 1kHz
   __HAL_TIM_SetCounter(htim, 0);
   return(count);
 }
