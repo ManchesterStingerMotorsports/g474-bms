@@ -24,12 +24,20 @@
 #include "string.h"
 #include "stdio.h"
 
-#include "adbms_libWrapper.h"
-#include "adbms_config.h"
+//#include "adbms_libWrapper.h"
+//#include "adbms_config.h"
+//
+//#include "adbms_mcuWrapper.h"
+//#include "adbms_cmdlist.h"
+//#include "adbms_utility.h"
+//
+//#include "adbms2950_data.h"
 
-#include "adbms_mcuWrapper.h"
-#include "adbms_cmdlist.h"
-#include "adbms_utility.h"
+#include "bms_cmdlist.h"
+#include "bms_datatypes.h"
+#include "bms_mcuWrapper.h"
+#include "bms_utility.h"
+
 
 /* USER CODE END Includes */
 
@@ -514,141 +522,6 @@ uint32_t getRuntimeMsDiff(uint32_t startTime)
     return HAL_GetTick() - startTime; // Divide 10 to get 10ms
 }
 
-uint16_t pec10_calc_custom(uint8_t *pDataBuf, int nLength, uint8_t *commandCounter) // Set command counter to NULL if not recieving
-{
-    uint16_t nRemainder = 16u; /* PEC_SEED */
-    /* x10 + x7 + x3 + x2 + x + 1 <- the CRC10 polynomial 100 1000 1111 */
-    uint16_t nPolynomial = 0x8Fu;
-    uint8_t nByteIndex, nBitIndex;
-
-    for (nByteIndex = 0u; nByteIndex < nLength; ++nByteIndex)
-    {
-        /* Bring the next byte into the remainder. */
-        nRemainder ^= (uint16_t)((uint16_t)pDataBuf[nByteIndex] << 2u);
-
-        /* Perform modulo-2 division, a bit at a time.*/
-        for (nBitIndex = 8u; nBitIndex > 0u; --nBitIndex)
-        {
-          /* Try to divide the current data bit. */
-            if ((nRemainder & 0x200u) > 0u)
-            {
-                nRemainder = (uint16_t)((nRemainder << 1u));
-                nRemainder = (uint16_t)(nRemainder ^ nPolynomial);
-            }
-            else
-            {
-                nRemainder = (uint16_t)(nRemainder << 1u);
-            }
-        }
-    }
-
-    /* If array is from received buffer add command counter to crc calculation */
-    if (commandCounter != NULL)
-    {
-        nRemainder ^= (uint16_t)(*commandCounter << 4u);
-    }
-
-    /* Perform modulo-2 division, a bit at a time */
-    for (nBitIndex = 6u; nBitIndex > 0u; --nBitIndex)
-    {
-        /* Try to divide the current data bit */
-        if ((nRemainder & 0x200u) > 0u)
-        {
-            nRemainder = (uint16_t)((nRemainder << 1u));
-            nRemainder = (uint16_t)(nRemainder ^ nPolynomial);
-        }
-        else
-        {
-            nRemainder = (uint16_t)((nRemainder << 1u));
-        }
-    }
-    return ((uint16_t)(nRemainder & 0x3FFu));
-}
-
-
-
-
-
-void sendCmd(uint8_t cmd[2])
-{
-    uint8_t txBuff_cmd[2 + 2];                  // 2 CMD  + 2 PEC
-
-    // Copy cmd bytes to buffer
-    txBuff_cmd[0] = cmd[0];
-    txBuff_cmd[1] = cmd[1];
-
-    // Add PEC bytes
-    uint16_t cmd_pec = Pec15_Calc(2, cmd);
-    txBuff_cmd[2] = (uint8_t)(cmd_pec >> 8);
-    txBuff_cmd[3] = (uint8_t)(cmd_pec);
-
-    // Transmit the buffer to SPI
-    HAL_SPI_Transmit(&hspi1, txBuff_cmd, 4, HAL_MAX_DELAY);
-}
-
-
-void sendData(uint8_t data[6 * TOTAL_IC])
-{
-    uint8_t txBuff_data[(6 + 2) * TOTAL_IC];    // 6 Data + 2 DPEC per IC
-
-    for (int i = 0; i > TOTAL_IC; i++)   /* The first configuration written is received by the last IC in the daisy chain */
-    {
-        int iv = (TOTAL_IC - i) - 1;    // Inverted index to get data from the back
-
-        // Copy data to the txbuffer
-        // First data is for the last IC
-        memcpy(txBuff_data + (i*6), data + (iv*6), 6); // dest, src, count
-
-        // Caclulate and add DPEC to buffer
-        uint16_t data_pec = pec10_calc(false, 6, txBuff_data + (i*6));
-        txBuff_data[(i*6) + 6 + 0] = (uint8_t)(data_pec >> 8);
-        txBuff_data[(i*6) + 6 + 1] = (uint8_t)(data_pec);
-    }
-
-    // Send the whole buffer to SPI
-    HAL_SPI_Transmit(&hspi1, txBuff_data, (6 + 2) * TOTAL_IC, HAL_MAX_DELAY);
-}
-
-
-void readData(uint8_t rxData[6 * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC])
-{
-    uint8_t rawRxData[8 * TOTAL_IC];
-
-    HAL_SPI_Receive(&hspi1, rawRxData, 8 * TOTAL_IC, HAL_MAX_DELAY);
-
-    for (int ic = 0; ic < TOTAL_IC; ic++)     /* executes for each ic in the daisy chain and packs the data */
-    {
-        // Store recieved data bytes to rxData
-        memcpy(rxData + (ic * 6), rawRxData + (ic * 8), 6);
-
-        // Get command counter value and store to the array
-        rxCc[ic] = rawRxData[(ic * 8) + 6] >> 2;              // Get the last 2 bytes and shift right by 2
-
-        // Get received pec value from ic
-        rxPec[ic] = (uint16_t)(((rawRxData[(ic * 8) + (8 - 2)] & 0x03) << 8) | rawRxData[(ic * 8) + (8 - 1)]); // Mask the first 3 bits from 1st byte and combine with 2nd byte
-    }
-}
-
-
-bool checkRxPec(uint8_t rxData[6 * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC], bool errorIndex[TOTAL_IC])
-{
-    bool pecOK = true;
-
-    for (int ic = 0; ic < TOTAL_IC; ic++)
-    {
-        uint16_t calculated_pec = pec10_calc_custom(rxData + (ic * 6), 6, rxCc + ic);
-
-        errorIndex[ic] = true;                          // True == PEC OK
-        if (calculated_pec != rxPec[ic])
-        {
-            errorIndex[ic] = false;                     // Store the error location
-            pecOK = false;                              // Return False to indicate PEC Error
-        }
-    }
-    return pecOK;
-}
-
-
 
 void readDaisyChainSID(void)
 {
@@ -657,14 +530,14 @@ void readDaisyChainSID(void)
     uint8_t  rxBuff_cc[TOTAL_IC] = {0};             // Command counter
     bool     errorIndex[TOTAL_IC] = {0};
 
-    adBmsWakeupIc(TOTAL_IC);                        // IC wakeup
+    bms_wakeupChain();                              // IC wakeup
 
-    adBmsCsLow();                                   // Start SPI Comms
-    sendCmd(RDSID);                                 // Send command
-    readData(rxBuff_data, rxBuff_pec, rxBuff_cc);   // read incoming bytes
-    adBmsCsHigh();                                  // End SPI Comms
+    bms_csLow();                                                // Start SPI Comms
+    bms_spiTransmitCmd(RDSID);                                  // Send command
+    bms_spiRecieveData(rxBuff_data, rxBuff_pec, rxBuff_cc);     // read incoming bytes
+    bms_csHigh();                                               // End SPI Comms
 
-    checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
+    bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
 
     for(int ic = 0; ic < TOTAL_IC; ic++)
     {
@@ -683,60 +556,32 @@ void readDaisyChainSID(void)
             printf("WARNING! PEC ERROR \n");
         }
     }
-
-
-//    const uint8_t nIC = 2;
-//    const uint8_t RX_DATA = 8;
-
-//    AD29_NS::adBmsReadData(tIC, &ic[0], RDSID, SID, NONE);  // Original function
-
-//    uint16_t rBuff_size = nIC * RX_DATA;
-//    uint8_t regData_size = RX_DATA;
-//
-//    uint8_t read_buffer[rBuff_size];
-//    uint8_t pec_error[nIC];
-//    uint8_t cmd_count[nIC];
-//
-//    spiReadData(nIC, RDSID, read_buffer, pec_error, cmd_count, regData_size);
-//
-//    for(int i = 0; i < nIC; i++)
-//    {
-//        printf("IC%d SID: \n", i);
-//        for(int j = 0; j < RX_DATA - 2; j++)
-//        {
-//            printf("0x%02X, ", read_buffer[j + i*RX_DATA]);
-//        }
-//        printf("pecError: %d, commandCounter: %d \n", pec_error[i], pec_error[i]);
-//    }
-
 }
 
 
 
-
-
+//
+//
 //void initBoth(void)
 //{
 //    adBmsWakeupIc(TOTAL_IC);
 //
 //
-//
+//    using namespace AD29_NS;
 //    {
-//      for(uint8_t cic = 0; cic < tIC; cic++)
-//      {
-//        /* Init config A */
-//        ic[cic].tx_cfga.refon = PWR_UP;
+//        for(uint8_t cic = 0; cic < tIC; cic++)
+//        {
+//            /* Init config A */
+//            ic[cic].tx_cfga.refon = PWR_UP;
 //
-//        /* Init config B */
-//        ic[cic].tx_cfgb.vs2 = VSM_SGND;
-//      }
-////      AD29_NS::adBmsWakeupIc(tIC);
-//      AD29_NS::adBmsWriteData(tIC, &ic[0], WRCFGA, Config, A);
-//      AD29_NS::adBmsWriteData(tIC, &ic[0], WRCFGB, Config, B);
+//            /* Init config B */
+//            ic[cic].tx_cfgb.vs2 = VSM_SGND;
+//        }
+//        adBmsWakeupIc(tIC);
+//
+//        AD29_NS::adBmsWriteData(tIC, &ic[0], WRCFGA, Config, A);
+//        AD29_NS::adBmsWriteData(tIC, &ic[0], WRCFGB, Config, B);
 //    }
-//
-//
-//
 //
 //
 //
@@ -775,17 +620,7 @@ void readDaisyChainSID(void)
 //      adBmsWriteData(tIC, &ic[0], WRCFGB, Config, B);
 //    }
 //
-//
-//
-//
 //}
-
-
-
-
-
-
-
 
 
 

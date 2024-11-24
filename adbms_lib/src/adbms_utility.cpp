@@ -178,8 +178,7 @@ uint16_t adi_pec10_calc_table(bool bIsRxCmd, uint8_t nLength, uint8_t *pDataBuf)
     for (nByteIndex = 0u; nByteIndex < nLength; ++nByteIndex)
     {
         /* calculate PEC table address */
-        nTableAddr = (uint16_t)(((uint16_t)(nRemainder >> 2) ^ (uint8_t)pDataBuf[nByteIndex]) &
-                                (uint8_t)0xff);
+        nTableAddr = (uint16_t)(((uint16_t)(nRemainder >> 2) ^ (uint8_t)pDataBuf[nByteIndex]) & (uint8_t)0xff);
         nRemainder = (uint16_t)(((uint16_t)(nRemainder << 8)) ^ crc10Table[nTableAddr]);
     }
     /* If array is from received buffer add command counter to crc calculation */
