@@ -104,7 +104,7 @@ static const uint16_t crc10Table[256] =
 uint16_t Pec15_Calc
 ( 
 uint8_t len, /* Number of bytes that will be used to calculate a PEC */
-uint8_t *data /* Array of data that will be used to calculate  a PEC */								 
+uint8_t *data /* Array of data that will be used to calculate  a PEC */
 )
 {
   uint16_t remainder,addr;
@@ -398,7 +398,7 @@ uint8_t *data
       /* Copy each ic correspond data + pec value for calculate data pec */
       memcpy(&copyArray[0], &data[src_address], TX_DATA); /* dst, src, size */
       /* calculating the PEC for each Ics configuration register data */
-      data_pec = (uint16_t)pec10_calc(false, BYTES_IN_REG, &copyArray[0]);  
+      data_pec = (uint16_t)pec10_calc(false, BYTES_IN_REG, &copyArray[0]);
       cmd[cmd_index] = (uint8_t)(data_pec >> 8);
       cmd_index = cmd_index + 1;
       cmd[cmd_index] = (uint8_t)data_pec;

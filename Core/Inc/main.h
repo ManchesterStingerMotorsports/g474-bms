@@ -52,6 +52,7 @@ extern TIM_HandleTypeDef htim2;
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
+#define TOTAL_IC 2
 
 /* USER CODE END EM */
 

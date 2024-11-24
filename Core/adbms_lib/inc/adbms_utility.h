@@ -11,7 +11,7 @@
 uint16_t Pec15_Calc
 ( 
   uint8_t len, /* Number of bytes that will be used to calculate a PEC */
-  uint8_t *data /* Array of data that will be used to calculate  a PEC */								 
+  uint8_t *data /* Array of data that will be used to calculate  a PEC */
 );									 
 uint16_t pec10_calc(bool rx_cmd, int len, uint8_t *data);
 void spiSendCmd(uint8_t tx_cmd[2]);

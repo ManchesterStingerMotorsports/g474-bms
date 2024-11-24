@@ -8,9 +8,6 @@
 #include "adbms6830_data.h"
 #include "adbms2950_data.h"
 
-
-constexpr uint8_t TOTAL_IC = 1;
-
 namespace AD68_NS
 {
     extern cell_asic IC[TOTAL_IC];
