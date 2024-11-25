@@ -1,0 +1,63 @@
+Expected Output:
+
+IC1: 
+SID: 0x4C, 0x02, 0x5C, 0xE5, 0xB4, 0x8C,  // Command Counter: 0 
+IC2: 
+SID: 0xAD, 0x06, 0x68, 0x25, 0xDB, 0x15,  // Command Counter: 0 
+IC1: 
+CFGA: 0x00, 0x00, 0x00, 0x3F, 0x3F, 0x11,  // Command Counter: 0 
+IC2: 
+CFGA: 0x01, 0x00, 0x00, 0xFF, 0x03, 0x00,  // Command Counter: 0 
+IC1: 
+CFGB: 0x00, 0x00, 0x00, 0x00, 0x01, 0xF0,  // Command Counter: 0 
+IC2: 
+CFGB: 0x00, 0xF8, 0x7F, 0x00, 0x00, 0x00,  // Command Counter: 0 
+Runtime: 10416 ms, CommandTime: 36 ms 
+
+
+/// Default SID Register: ------------------------- /
+
+2950: 0x4C, 0x2, 0x5C, 0xE5, 0xB4, 0x8C
+6830: 0xAD, 0x6, 0x68, 0x25, 0xDB, 0x15
+
+/// Default Reset Configs: ------------------------- /
+
+/------ ADMBS2950 -------/
+
+CFGA: 0000003F3F11 
+
+0000 0000 
+0000 0000 
+0000 0000
+0011 1111 
+0011 1111 
+0001 0001
+
+CFGB: 0000000001F0
+
+0000 0000 
+0000 0000 
+0000 0000 
+0000 0000 
+0000 0001 
+1111 0000
+
+/------ ADMBS6830 -------/
+
+CFGA: 010000FF0300
+
+0000 0001 
+0000 0000 
+0000 0000 
+1111 1111 
+0000 0011 
+0000 0000
+
+CFGB: 00F87F000000
+
+0000 0000 
+1111 1000 
+0111 1111 
+0000 0000 
+0000 0000 
+0000 0000

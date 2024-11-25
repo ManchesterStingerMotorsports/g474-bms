@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "common.h"
+#include "main.h"
 
 #define DATA_LEN       (6)       // Data
 #define DATAPKT_LEN    (6 + 2)   // Data + DPEC

@@ -5,12 +5,11 @@
  *      Author: amrlxyz
  */
 
-#include "common.h"
 #include "bms_mcuWrapper.h"
+#include "main.h"
 
-#define WAKEUP_DELAY 4       /// 1ms for 2950   /* BMS ic wakeup delay  */
+#define WAKEUP_DELAY 1       /// 1ms for 2950   /* BMS ic wakeup delay  */
 
-//static SPI_HandleTypeDef *hspi         = &hspi1;       /* MCU SPI Handler */
 static TIM_HandleTypeDef *htim         = &htim2;       /* MCU TIM handler */
 
 #define GPIO_PORT   BMS_CS_GPIO_Port
@@ -60,8 +59,6 @@ void bms_wakeupChain(void)
         HAL_Delay(WAKEUP_DELAY);
     }
 }
-
-
 
 
 

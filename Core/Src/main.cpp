@@ -35,8 +35,8 @@
 
 #include "bms_cmdlist.h"
 #include "bms_datatypes.h"
-#include "bms_mcuWrapper.h"
 #include "bms_utility.h"
+#include "bms_mcuWrapper.h"
 
 
 /* USER CODE END Includes */
@@ -84,12 +84,7 @@ uint32_t getRuntimeMsDiff(uint32_t startTime);
 // Array size are unnecessary but helpful to debug
 
 void readDaisyChainSID(void);
-
-void sendCmd(uint8_t cmd[2]);
-void sendData(const uint8_t data[6 * TOTAL_IC]);
-
-void readData(uint8_t rxData[6 * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC]);
-bool checkRxPec(uint8_t rxData[6 * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC], bool errorIndex[TOTAL_IC]);
+void readCFG(void);
 
 /* USER CODE END PFP */
 
@@ -175,6 +170,7 @@ int main(void)
 //        AD29_NS::adi2950_read_device_sid(TOTAL_IC, AD29_NS::IC);
 
         readDaisyChainSID();
+        readCFG();
 
         timeDiff = getRuntimeMsDiff(timeStart);
         sprintf(message, "Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
@@ -251,7 +247,7 @@ static void MX_LPUART1_UART_Init(void)
 
   /* USER CODE END LPUART1_Init 1 */
   hlpuart1.Instance = LPUART1;
-  hlpuart1.Init.BaudRate = 115200;
+  hlpuart1.Init.BaudRate = 500000;
   hlpuart1.Init.WordLength = UART_WORDLENGTH_8B;
   hlpuart1.Init.StopBits = UART_STOPBITS_1;
   hlpuart1.Init.Parity = UART_PARITY_NONE;
@@ -499,7 +495,6 @@ extern "C"
 
 
 /// Timer interrupt callback
-
 // Callback: timer has rolled over
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -545,6 +540,70 @@ void readDaisyChainSID(void)
         if (errorIndex[ic])
         {
             printf("SID: ");
+            for (int j = 0; j < 6; j++)                     // For every byte recieved (6 bytes)
+            {
+                printf("0x%02X, ", rxBuff_data[j + ic*6]);  // Print each of the bytes
+            }
+            printf(" // Command Counter: %d \n", rxBuff_cc[ic]);     // Print command counter
+        }
+        else // If PEC error
+        {
+            printf("WARNING! PEC ERROR \n");
+        }
+    }
+}
+
+
+void readCFG()
+{
+    uint8_t  rxBuff_data[6 * TOTAL_IC] = {0};       // 6 Data (not including 2 DPEC) per IC
+    uint16_t rxBuff_pec[TOTAL_IC] = {0};            // Data PEC
+    uint8_t  rxBuff_cc[TOTAL_IC] = {0};             // Command counter
+    bool     errorIndex[TOTAL_IC] = {0};
+
+    bms_wakeupChain();                              // IC wakeup
+
+    bms_csLow();                                                // Start SPI Comms
+    bms_spiTransmitCmd(RDCFGA);                                 // Send command
+    bms_spiRecieveData(rxBuff_data, rxBuff_pec, rxBuff_cc);     // read incoming bytes
+    bms_csHigh();                                               // End SPI Comms
+
+    bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
+
+    for(int ic = 0; ic < TOTAL_IC; ic++)
+    {
+        printf("IC%d: \n", ic+1);
+        if (errorIndex[ic])
+        {
+            printf("CFGA: ");
+            for (int j = 0; j < 6; j++)                     // For every byte recieved (6 bytes)
+            {
+                printf("0x%02X, ", rxBuff_data[j + ic*6]);  // Print each of the bytes
+            }
+            printf(" // Command Counter: %d \n", rxBuff_cc[ic]);     // Print command counter
+        }
+        else // If PEC error
+        {
+            printf("WARNING! PEC ERROR \n");
+        }
+    }
+
+
+    bms_wakeupChain();
+
+    bms_csLow();                                                // Start SPI Comms
+    bms_spiTransmitCmd(RDCFGB);                                 // Send command
+    bms_spiRecieveData(rxBuff_data, rxBuff_pec, rxBuff_cc);     // read incoming bytes
+    bms_csHigh();                                               // End SPI Comms
+
+    bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
+
+    for(int ic = 0; ic < TOTAL_IC; ic++)
+    {
+        printf("IC%d: \n", ic+1);
+        if (errorIndex[ic])
+        {
+            printf("CFGB: ");
             for (int j = 0; j < 6; j++)                     // For every byte recieved (6 bytes)
             {
                 printf("0x%02X, ", rxBuff_data[j + ic*6]);  // Print each of the bytes

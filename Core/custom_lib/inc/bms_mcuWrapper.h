@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "stdint.h"
+
 // Chip select
 void bms_csLow(void);
 void bms_csHigh(void);
@@ -20,3 +22,5 @@ uint32_t bms_getTimCount(void);  // Get time elapsed in us
 
 // Wake up all the IC in the daisy chain
 void bms_wakeupChain(void);
+
+void bro(void);

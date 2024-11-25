@@ -7,7 +7,7 @@
 
 #pragma once
 
-
+#include "stdint.h"
 
 /* ADBMS2950 CFGA Data structure*/
 typedef struct

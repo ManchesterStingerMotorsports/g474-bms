@@ -5,8 +5,12 @@
  *      Author: amrlxyz
  */
 
-#include "common.h"
 #include "bms_utility.h"
+#include "main.h"
+#include "string.h"
+
+
+static SPI_HandleTypeDef *hspi         = &hspi1;       /* MCU SPI Handler */
 
 /* Precomputed CRC15 Table */
 const uint16_t Crc15Table[256] =
@@ -122,7 +126,7 @@ void bms_spiTransmitCmd(uint8_t cmd[CMD_LEN])
     txBuff_cmd[3] = (uint8_t)(cmd_pec);
 
     // Transmit the buffer to SPI
-    HAL_SPI_Transmit(&hspi1, txBuff_cmd, CMDPKT_LEN, HAL_MAX_DELAY);
+    HAL_SPI_Transmit(hspi, txBuff_cmd, CMDPKT_LEN, HAL_MAX_DELAY);
 }
 
 
@@ -145,7 +149,7 @@ void bms_spiTransmitData(uint8_t data[DATA_LEN * TOTAL_IC])
     }
 
     // Send the whole buffer to SPI
-    HAL_SPI_Transmit(&hspi1, txBuff_data, DATAPKT_LEN * TOTAL_IC, HAL_MAX_DELAY);
+    HAL_SPI_Transmit(hspi, txBuff_data, DATAPKT_LEN * TOTAL_IC, HAL_MAX_DELAY);
 }
 
 
@@ -153,7 +157,7 @@ void bms_spiRecieveData(uint8_t rxData[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTA
 {
     uint8_t rawRxData[DATAPKT_LEN * TOTAL_IC];
 
-    HAL_SPI_Receive(&hspi1, rawRxData, DATAPKT_LEN * TOTAL_IC, HAL_MAX_DELAY);
+    HAL_SPI_Receive(hspi, rawRxData, DATAPKT_LEN * TOTAL_IC, HAL_MAX_DELAY);
 
     for (int ic = 0; ic < TOTAL_IC; ic++)     /* executes for each ic in the daisy chain and packs the data */
     {
@@ -187,3 +191,8 @@ bool bms_checkRxPec(uint8_t rxData[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC
     }
     return pecOK;
 }
+
+
+
+
+
