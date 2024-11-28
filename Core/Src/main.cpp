@@ -568,6 +568,11 @@ void readCFG()
     bms_spiRecieveData(rxBuff_data, rxBuff_pec, rxBuff_cc);     // read incoming bytes
     bms_csHigh();                                               // End SPI Comms
 
+    ad29_cfa_t ad29_cfa;
+    ad68_cfa_t ad68_cfa;
+    memcpy(&ad29_cfa, rxBuff_data, DATA_LEN);
+    memcpy(&ad68_cfa, rxBuff_data + DATA_LEN, DATA_LEN);
+
     bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
 
     for(int ic = 0; ic < TOTAL_IC; ic++)
@@ -588,13 +593,17 @@ void readCFG()
         }
     }
 
-
     bms_wakeupChain();
 
     bms_csLow();                                                // Start SPI Comms
     bms_spiTransmitCmd(RDCFGB);                                 // Send command
     bms_spiRecieveData(rxBuff_data, rxBuff_pec, rxBuff_cc);     // read incoming bytes
     bms_csHigh();                                               // End SPI Comms
+
+    ad29_cfb_t ad29_cfb;
+    ad68_cfb_t ad68_cfb;
+    memcpy(&ad29_cfb, rxBuff_data, DATA_LEN);
+    memcpy(&ad68_cfb, rxBuff_data + DATA_LEN, DATA_LEN);
 
     bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
 
@@ -615,6 +624,8 @@ void readCFG()
             printf("WARNING! PEC ERROR \n");
         }
     }
+
+    //bms_delayUs(1000000);
 }
 
 

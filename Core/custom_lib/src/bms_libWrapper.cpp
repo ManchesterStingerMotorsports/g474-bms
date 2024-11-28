@@ -6,6 +6,50 @@
  */
 
 #include "bms_libWrapper.h"
+#include "bms_datatypes.h"
+#include "bms_utility.h"
+#include "bms_mcuWrapper.h"
+#include "bms_cmdlist.h"
+
+#include "string.h"
+#include "main.h"
+
+ad29_cfa_t ad29_cfaTx;
+ad29_cfb_t ad29_cfbTx;
+
+ad29_cfa_t ad29_cfaRx;
+ad29_cfb_t ad29_cfbRx;
+
+ad68_cfa_t ad68_cfaTx[TOTAL_IC-1];
+ad68_cfb_t ad68_cfbTx[TOTAL_IC-1];
+
+ad68_cfa_t ad68_cfaRx[TOTAL_IC-1];
+ad68_cfb_t ad68_cfbRx[TOTAL_IC-1];
+
+
+void bms_initConfig(void)
+{
+    // Obtained from RDCFG after reset
+    uint64_t const ad29_cfaDefault = 0x0000003F3F11;
+    uint64_t const ad29_cfbDefault = 0x0000000001F0;
+    uint64_t const ad68_cfaDefault = 0x010000FF0300;
+    uint64_t const ad68_cfbDefault = 0x00F87F000000;
+
+    // Copy defaults to Tx Buffer
+    memcpy(&ad29_cfaTx, &ad29_cfaDefault, 6);
+    memcpy(&ad29_cfbTx, &ad29_cfbDefault, 6);
+
+    for (int ic = 0; ic < TOTAL_IC; ic++)
+    {
+        memcpy(ad68_cfaTx, &ad68_cfaDefault, 6);
+        memcpy(ad68_cfbTx, &ad68_cfbDefault, 6);
+    }
+
+
+
+
+}
+
 
 
 

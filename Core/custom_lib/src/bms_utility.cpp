@@ -6,6 +6,7 @@
  */
 
 #include "bms_utility.h"
+#include "bms_mcuWrapper.h"
 #include "main.h"
 #include "string.h"
 
@@ -190,6 +191,28 @@ bool bms_checkRxPec(uint8_t rxData[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC
         }
     }
     return pecOK;
+}
+
+
+void bms_transmitData(uint8_t cmd[CMD_LEN], uint8_t txBuffer[DATA_LEN * TOTAL_IC])
+{
+    bms_wakeupChain();
+
+    bms_csLow();
+    bms_spiTransmitCmd(cmd);
+    bms_spiTransmitData(txBuffer);
+    bms_csHigh();
+}
+
+
+void bms_recieveData(uint8_t cmd[CMD_LEN], uint8_t rxBuffer[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC])
+{
+    bms_wakeupChain();
+
+    bms_csLow();
+    bms_spiTransmitCmd(cmd);
+    bms_spiRecieveData(rxBuffer, rxPec, rxCc);
+    bms_csHigh();
 }
 
 

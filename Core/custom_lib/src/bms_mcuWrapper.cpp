@@ -61,5 +61,13 @@ void bms_wakeupChain(void)
 }
 
 
+void bms_delayUs(uint32_t us)
+{
+    bms_startTimer();
+    while(bms_getTimCount() < us); // Do nothing while timer still counting
+    bms_stopTimer();
+}
+
+
 
 

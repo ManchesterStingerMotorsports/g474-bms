@@ -23,4 +23,5 @@ uint32_t bms_getTimCount(void);  // Get time elapsed in us
 // Wake up all the IC in the daisy chain
 void bms_wakeupChain(void);
 
-void bro(void);
+// Microsecond delay
+void bms_delayUs(uint32_t us);
