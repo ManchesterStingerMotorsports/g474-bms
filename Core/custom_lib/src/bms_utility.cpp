@@ -135,18 +135,18 @@ void bms_spiTransmitData(uint8_t data[DATA_LEN * TOTAL_IC])
 {
     uint8_t txBuff_data[DATAPKT_LEN * TOTAL_IC];    // 6 Data + 2 DPEC per IC
 
-    for (int i = 0; i > TOTAL_IC; i++)   /* The first configuration written is received by the last IC in the daisy chain */
+    for (int ic = 0; ic < TOTAL_IC; ic++)   /* The first configuration written is received by the last IC in the daisy chain */
     {
-        int iv = (TOTAL_IC - i) - 1;    // Inverted index to get data from the back
+        int iv = (TOTAL_IC - 1) - ic;    // Inverted index to get data from the back
 
         // Copy data to the txbuffer
         // First data is for the last IC
-        memcpy(txBuff_data + (i*DATA_LEN), data + (iv*DATA_LEN), DATA_LEN); // dest, src, count
+        memcpy(txBuff_data + (ic*DATAPKT_LEN), data + (iv*DATA_LEN), DATA_LEN); // dest, src, count
 
         // Caclulate and add DPEC to buffer
-        uint16_t data_pec = bms_calcPec10(txBuff_data + (i*DATA_LEN), DATA_LEN, NULL);
-        txBuff_data[(i*DATA_LEN) + DATA_LEN + 0] = (uint8_t)(data_pec >> 8);
-        txBuff_data[(i*DATA_LEN) + DATA_LEN + 1] = (uint8_t)(data_pec);
+        uint16_t data_pec = bms_calcPec10(txBuff_data + (ic*DATA_LEN), DATA_LEN, NULL);
+        txBuff_data[(ic*DATAPKT_LEN) + DATA_LEN + 0] = (uint8_t)(data_pec >> 8);
+        txBuff_data[(ic*DATAPKT_LEN) + DATA_LEN + 1] = (uint8_t)(data_pec);
     }
 
     // Send the whole buffer to SPI

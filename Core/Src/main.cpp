@@ -37,6 +37,7 @@
 #include "bms_datatypes.h"
 #include "bms_utility.h"
 #include "bms_mcuWrapper.h"
+#include "bms_libWrapper.h"
 
 
 /* USER CODE END Includes */
@@ -150,6 +151,8 @@ int main(void)
 
     HAL_TIM_Base_Start_IT(&htim16);
 
+    bms_resetConfig();
+
     char message[50];
 
     uint32_t timeDiff = 0;
@@ -169,8 +172,11 @@ int main(void)
 
 //        AD29_NS::adi2950_read_device_sid(TOTAL_IC, AD29_NS::IC);
 
-        readDaisyChainSID();
+//        readDaisyChainSID();
         readCFG();
+        bms68_toggleGpo();
+        readCFG();
+
 
         timeDiff = getRuntimeMsDiff(timeStart);
         sprintf(message, "Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
@@ -575,8 +581,10 @@ void readCFG()
 
     bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
 
-    for(int ic = 0; ic < TOTAL_IC; ic++)
+    for (int ic = 0; ic < TOTAL_IC; ic++)
     {
+        if (ic == 0) continue;
+
         printf("IC%d: \n", ic+1);
         if (errorIndex[ic])
         {
@@ -593,40 +601,41 @@ void readCFG()
         }
     }
 
-    bms_wakeupChain();
-
-    bms_csLow();                                                // Start SPI Comms
-    bms_spiTransmitCmd(RDCFGB);                                 // Send command
-    bms_spiRecieveData(rxBuff_data, rxBuff_pec, rxBuff_cc);     // read incoming bytes
-    bms_csHigh();                                               // End SPI Comms
-
-    ad29_cfb_t ad29_cfb;
-    ad68_cfb_t ad68_cfb;
-    memcpy(&ad29_cfb, rxBuff_data, DATA_LEN);
-    memcpy(&ad68_cfb, rxBuff_data + DATA_LEN, DATA_LEN);
-
-    bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
-
-    for(int ic = 0; ic < TOTAL_IC; ic++)
-    {
-        printf("IC%d: \n", ic+1);
-        if (errorIndex[ic])
-        {
-            printf("CFGB: ");
-            for (int j = 0; j < 6; j++)                     // For every byte recieved (6 bytes)
-            {
-                printf("0x%02X, ", rxBuff_data[j + ic*6]);  // Print each of the bytes
-            }
-            printf(" // Command Counter: %d \n", rxBuff_cc[ic]);     // Print command counter
-        }
-        else // If PEC error
-        {
-            printf("WARNING! PEC ERROR \n");
-        }
-    }
+//    bms_wakeupChain();
+//
+//    bms_csLow();                                                // Start SPI Comms
+//    bms_spiTransmitCmd(RDCFGB);                                 // Send command
+//    bms_spiRecieveData(rxBuff_data, rxBuff_pec, rxBuff_cc);     // read incoming bytes
+//    bms_csHigh();                                               // End SPI Comms
+//
+//    ad29_cfb_t ad29_cfb;
+//    ad68_cfb_t ad68_cfb;
+//    memcpy(&ad29_cfb, rxBuff_data, DATA_LEN);
+//    memcpy(&ad68_cfb, rxBuff_data + DATA_LEN, DATA_LEN);
+//
+//    bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
+//
+//    for(int ic = 0; ic < TOTAL_IC; ic++)
+//    {
+//        printf("IC%d: \n", ic+1);
+//        if (errorIndex[ic])
+//        {
+//            printf("CFGB: ");
+//            for (int j = 0; j < 6; j++)                     // For every byte recieved (6 bytes)
+//            {
+//                printf("0x%02X, ", rxBuff_data[j + ic*6]);  // Print each of the bytes
+//            }
+//            printf(" // Command Counter: %d \n", rxBuff_cc[ic]);     // Print command counter
+//        }
+//        else // If PEC error
+//        {
+//            printf("WARNING! PEC ERROR \n");
+//        }
+//    }
 
     //bms_delayUs(1000000);
 }
+
 
 
 

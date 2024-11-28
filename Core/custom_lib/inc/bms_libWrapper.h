@@ -22,8 +22,12 @@ extern ad68_cfb_t ad68_cfbTx[TOTAL_IC-1];
 extern ad68_cfa_t ad68_cfaRx[TOTAL_IC-1];
 extern ad68_cfb_t ad68_cfbRx[TOTAL_IC-1];
 
+void bms_resetConfig(void);
 
-void bms_initConfig(void);
+
+
+void bms68_toggleGpo(void);
+
 
 
 

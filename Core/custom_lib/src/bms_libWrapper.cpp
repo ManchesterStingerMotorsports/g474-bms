@@ -26,30 +26,81 @@ ad68_cfb_t ad68_cfbTx[TOTAL_IC-1];
 ad68_cfa_t ad68_cfaRx[TOTAL_IC-1];
 ad68_cfb_t ad68_cfbRx[TOTAL_IC-1];
 
+uint8_t  txData[TOTAL_IC * DATA_LEN];
+uint8_t  rxData[TOTAL_IC * DATA_LEN];
+uint16_t rxPec[TOTAL_IC];
+uint8_t  rxCc[TOTAL_IC];
 
-void bms_initConfig(void)
+void bms_resetConfig(void)
 {
     // Obtained from RDCFG after reset
-    uint64_t const ad29_cfaDefault = 0x0000003F3F11;
-    uint64_t const ad29_cfbDefault = 0x0000000001F0;
-    uint64_t const ad68_cfaDefault = 0x010000FF0300;
-    uint64_t const ad68_cfbDefault = 0x00F87F000000;
+    // 0x00 added at LSB due to Little endian
+    uint64_t const ad29_cfaDefault = 0x0000003F3F1100;
+    uint64_t const ad29_cfbDefault = 0x0000000001F000;
+    uint64_t const ad68_cfaDefault = 0x010000FF030000;
+    uint64_t const ad68_cfbDefault = 0x00F87F00000000;
 
     // Copy defaults to Tx Buffer
-    memcpy(&ad29_cfaTx, &ad29_cfaDefault, 6);
-    memcpy(&ad29_cfbTx, &ad29_cfbDefault, 6);
+    memcpy(&ad29_cfaTx, &ad29_cfaDefault, DATA_LEN);
+    memcpy(&ad29_cfbTx, &ad29_cfbDefault, DATA_LEN);
 
-    for (int ic = 0; ic < TOTAL_IC; ic++)
+    for (int ic = 0; ic < TOTAL_IC-1; ic++)
     {
-        memcpy(ad68_cfaTx, &ad68_cfaDefault, 6);
-        memcpy(ad68_cfbTx, &ad68_cfbDefault, 6);
+        memcpy(&ad68_cfaTx[ic], &ad68_cfaDefault, DATA_LEN);
+        memcpy(&ad68_cfbTx[ic], &ad68_cfbDefault, DATA_LEN);
     }
-
-
-
-
 }
 
+
+// Fill in the tx buffer for the 2950 and 6830 daisy chain
+void bms_setupTxBuffer(uint8_t ad29[DATA_LEN], uint8_t ad68[DATA_LEN])
+{
+    // Fill buffer for ad2950 first
+    memcpy(txData, ad29, DATA_LEN);
+
+    // Fill buffer with the other ad6830 data
+    for (int ic = 1; ic < TOTAL_IC; ic++)
+    {
+        memcpy(txData + ic*DATA_LEN, ad68, DATA_LEN);
+    }
+}
+
+
+void bms_writeConfigA(void)
+{
+    // write config A
+    bms_setupTxBuffer((uint8_t *)&ad29_cfaTx, (uint8_t *)&ad68_cfaTx);
+    bms_transmitData(WRCFGA, txData);
+}
+
+
+void bms_writeConfigB(void)
+{
+    // write config B
+    bms_setupTxBuffer((uint8_t *)&ad29_cfbTx, (uint8_t *)&ad68_cfbTx);
+    bms_transmitData(WRCFGB, txData);
+}
+
+
+void bms68_toggleGpo(void)
+{
+    static bool gpo_on = false;
+
+    if (gpo_on)
+    {
+        ad68_cfaTx[0].gpo1to8  = 0x00;
+        ad68_cfaTx[0].gpo9to10 = 0b00;
+        gpo_on = false;
+    }
+    else
+    {
+        ad68_cfaTx[0].gpo1to8  = 0xFF;
+        ad68_cfaTx[0].gpo9to10 = 0b11;
+        gpo_on = true;
+    }
+
+    bms_writeConfigA();
+}
 
 
 
