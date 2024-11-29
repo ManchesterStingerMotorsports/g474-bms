@@ -81,11 +81,6 @@ static void MX_TIM16_Init(void);
 uint32_t getRuntimeMs(void);
 uint32_t getRuntimeMsDiff(uint32_t startTime);
 
-// ADBMS Experimental Functions
-// Array size are unnecessary but helpful to debug
-
-void readDaisyChainSID(void);
-void readCFG(void);
 
 /* USER CODE END PFP */
 
@@ -144,14 +139,11 @@ int main(void)
     HAL_GPIO_WritePin(BMS_MSTR_GPIO_Port, BMS_MSTR_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(BMS_MSTR2_GPIO_Port, BMS_MSTR2_Pin, GPIO_PIN_SET);
 
-
-//    AD68_NS::adBms6830_init_config(TOTAL_IC, AD68_NS::IC);
-//    AD29_NS::adi2950_init_config(TOTAL_IC, AD29_NS::IC);
-
-
+    // Start Timer16
     HAL_TIM_Base_Start_IT(&htim16);
 
-    bms_resetConfig();
+    // Initialise BMS configs (No commands sent)
+    bms_init();
 
     char message[50];
 
@@ -159,6 +151,8 @@ int main(void)
     uint32_t timeStart;
 
     printf("Start Program \n\n");
+
+    bms_readSid();
 
     while (1)
     {
@@ -169,13 +163,13 @@ int main(void)
 //        AD68_NS::adBms6830_start_adc_cell_voltage_measurment(TOTAL_IC);
 //        HAL_Delay(1);
 //        AD68_NS::adBms6830_read_cell_voltages(TOTAL_IC, AD68_NS::IC);
-
 //        AD29_NS::adi2950_read_device_sid(TOTAL_IC, AD29_NS::IC);
-
 //        readDaisyChainSID();
-        readCFG();
-        bms68_toggleGpo();
-        readCFG();
+
+
+        bms_readConfigA();
+        bms68_toggleGpo4();
+        bms_readConfigA();
 
 
         timeDiff = getRuntimeMsDiff(timeStart);
@@ -523,83 +517,83 @@ uint32_t getRuntimeMsDiff(uint32_t startTime)
     return HAL_GetTick() - startTime; // Divide 10 to get 10ms
 }
 
-
-void readDaisyChainSID(void)
-{
-    uint8_t  rxBuff_data[6 * TOTAL_IC] = {0};       // 6 Data (not including 2 DPEC) per IC
-    uint16_t rxBuff_pec[TOTAL_IC] = {0};            // Data PEC
-    uint8_t  rxBuff_cc[TOTAL_IC] = {0};             // Command counter
-    bool     errorIndex[TOTAL_IC] = {0};
-
-    bms_wakeupChain();                              // IC wakeup
-
-    bms_csLow();                                                // Start SPI Comms
-    bms_spiTransmitCmd(RDSID);                                  // Send command
-    bms_spiRecieveData(rxBuff_data, rxBuff_pec, rxBuff_cc);     // read incoming bytes
-    bms_csHigh();                                               // End SPI Comms
-
-    bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
-
-    for(int ic = 0; ic < TOTAL_IC; ic++)
-    {
-        printf("IC%d: \n", ic+1);
-        if (errorIndex[ic])
-        {
-            printf("SID: ");
-            for (int j = 0; j < 6; j++)                     // For every byte recieved (6 bytes)
-            {
-                printf("0x%02X, ", rxBuff_data[j + ic*6]);  // Print each of the bytes
-            }
-            printf(" // Command Counter: %d \n", rxBuff_cc[ic]);     // Print command counter
-        }
-        else // If PEC error
-        {
-            printf("WARNING! PEC ERROR \n");
-        }
-    }
-}
-
-
-void readCFG()
-{
-    uint8_t  rxBuff_data[6 * TOTAL_IC] = {0};       // 6 Data (not including 2 DPEC) per IC
-    uint16_t rxBuff_pec[TOTAL_IC] = {0};            // Data PEC
-    uint8_t  rxBuff_cc[TOTAL_IC] = {0};             // Command counter
-    bool     errorIndex[TOTAL_IC] = {0};
-
-    bms_wakeupChain();                              // IC wakeup
-
-    bms_csLow();                                                // Start SPI Comms
-    bms_spiTransmitCmd(RDCFGA);                                 // Send command
-    bms_spiRecieveData(rxBuff_data, rxBuff_pec, rxBuff_cc);     // read incoming bytes
-    bms_csHigh();                                               // End SPI Comms
-
-    ad29_cfa_t ad29_cfa;
-    ad68_cfa_t ad68_cfa;
-    memcpy(&ad29_cfa, rxBuff_data, DATA_LEN);
-    memcpy(&ad68_cfa, rxBuff_data + DATA_LEN, DATA_LEN);
-
-    bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
-
-    for (int ic = 0; ic < TOTAL_IC; ic++)
-    {
-        if (ic == 0) continue;
-
-        printf("IC%d: \n", ic+1);
-        if (errorIndex[ic])
-        {
-            printf("CFGA: ");
-            for (int j = 0; j < 6; j++)                     // For every byte recieved (6 bytes)
-            {
-                printf("0x%02X, ", rxBuff_data[j + ic*6]);  // Print each of the bytes
-            }
-            printf(" // Command Counter: %d \n", rxBuff_cc[ic]);     // Print command counter
-        }
-        else // If PEC error
-        {
-            printf("WARNING! PEC ERROR \n");
-        }
-    }
+//
+//void readDaisyChainSID(void)
+//{
+//    uint8_t  rxBuff_data[6 * TOTAL_IC] = {0};       // 6 Data (not including 2 DPEC) per IC
+//    uint16_t rxBuff_pec[TOTAL_IC] = {0};            // Data PEC
+//    uint8_t  rxBuff_cc[TOTAL_IC] = {0};             // Command counter
+//    bool     errorIndex[TOTAL_IC] = {0};
+//
+//    bms_wakeupChain();                              // IC wakeup
+//
+//    bms_csLow();                                                // Start SPI Comms
+//    bms_spiTransmitCmd(RDSID);                                  // Send command
+//    bms_spiRecieveData(rxBuff_data, rxBuff_pec, rxBuff_cc);     // read incoming bytes
+//    bms_csHigh();                                               // End SPI Comms
+//
+//    bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
+//
+//    for(int ic = 0; ic < TOTAL_IC; ic++)
+//    {
+//        printf("IC%d: \n", ic+1);
+//        if (errorIndex[ic])
+//        {
+//            printf("SID: ");
+//            for (int j = 0; j < 6; j++)                     // For every byte recieved (6 bytes)
+//            {
+//                printf("0x%02X, ", rxBuff_data[j + ic*6]);  // Print each of the bytes
+//            }
+//            printf(" // Command Counter: %d \n", rxBuff_cc[ic]);     // Print command counter
+//        }
+//        else // If PEC error
+//        {
+//            printf("WARNING! PEC ERROR \n");
+//        }
+//    }
+//}
+//
+//
+//void readCFG()
+//{
+//    uint8_t  rxBuff_data[6 * TOTAL_IC] = {0};       // 6 Data (not including 2 DPEC) per IC
+//    uint16_t rxBuff_pec[TOTAL_IC] = {0};            // Data PEC
+//    uint8_t  rxBuff_cc[TOTAL_IC] = {0};             // Command counter
+//    bool     errorIndex[TOTAL_IC] = {0};
+//
+//    bms_wakeupChain();                              // IC wakeup
+//
+//    bms_csLow();                                                // Start SPI Comms
+//    bms_spiTransmitCmd(RDCFGA);                                 // Send command
+//    bms_spiRecieveData(rxBuff_data, rxBuff_pec, rxBuff_cc);     // read incoming bytes
+//    bms_csHigh();                                               // End SPI Comms
+//
+//    ad29_cfa_t ad29_cfa;
+//    ad68_cfa_t ad68_cfa;
+//    memcpy(&ad29_cfa, rxBuff_data, DATA_LEN);
+//    memcpy(&ad68_cfa, rxBuff_data + DATA_LEN, DATA_LEN);
+//
+//    bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
+//
+//    for (int ic = 0; ic < TOTAL_IC; ic++)
+//    {
+//        if (ic == 0) continue;
+//
+//        printf("IC%d: \n", ic+1);
+//        if (errorIndex[ic])
+//        {
+//            printf("CFGA: ");
+//            for (int j = 0; j < 6; j++)                     // For every byte recieved (6 bytes)
+//            {
+//                printf("0x%02X, ", rxBuff_data[j + ic*6]);  // Print each of the bytes
+//            }
+//            printf(" // Command Counter: %d \n", rxBuff_cc[ic]);     // Print command counter
+//        }
+//        else // If PEC error
+//        {
+//            printf("WARNING! PEC ERROR \n");
+//        }
+//    }
 
 //    bms_wakeupChain();
 //
@@ -634,7 +628,7 @@ void readCFG()
 //    }
 
     //bms_delayUs(1000000);
-}
+//}
 
 
 

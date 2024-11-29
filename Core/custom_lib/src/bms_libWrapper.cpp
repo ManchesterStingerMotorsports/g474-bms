@@ -11,8 +11,10 @@
 #include "bms_mcuWrapper.h"
 #include "bms_cmdlist.h"
 
-#include "string.h"
+#include <string.h>
+#include <stdio.h>
 #include "main.h"
+
 
 ad29_cfa_t ad29_cfaTx;
 ad29_cfb_t ad29_cfbTx;
@@ -30,6 +32,7 @@ uint8_t  txData[TOTAL_IC * DATA_LEN];
 uint8_t  rxData[TOTAL_IC * DATA_LEN];
 uint16_t rxPec[TOTAL_IC];
 uint8_t  rxCc[TOTAL_IC];
+
 
 void bms_resetConfig(void)
 {
@@ -49,6 +52,12 @@ void bms_resetConfig(void)
         memcpy(&ad68_cfaTx[ic], &ad68_cfaDefault, DATA_LEN);
         memcpy(&ad68_cfbTx[ic], &ad68_cfbDefault, DATA_LEN);
     }
+}
+
+
+void bms_init(void)
+{
+    bms_resetConfig();
 }
 
 
@@ -82,24 +91,75 @@ void bms_writeConfigB(void)
 }
 
 
-void bms68_toggleGpo(void)
+void bms68_toggleGpo4(void)
 {
-    static bool gpo_on = false;
-
-    if (gpo_on)
-    {
-        ad68_cfaTx[0].gpo1to8  = 0x00;
-        ad68_cfaTx[0].gpo9to10 = 0b00;
-        gpo_on = false;
-    }
-    else
-    {
-        ad68_cfaTx[0].gpo1to8  = 0xFF;
-        ad68_cfaTx[0].gpo9to10 = 0b11;
-        gpo_on = true;
-    }
-
+    ad68_cfaTx[0].gpo1to8  ^= (1u << (4-1));
     bms_writeConfigA();
+}
+
+
+void bms_printRawData(uint8_t data[DATA_LEN * TOTAL_IC], uint8_t cc[TOTAL_IC])
+{
+    for (int ic = 0; ic < TOTAL_IC; ic++)
+    {
+        printf("IC%d: ", ic+1);
+        for (int j = 0; j < 6; j++)              // For every byte recieved (6 bytes)
+        {
+            printf("0x%02X, ", data[j + ic*6]);  // Print each of the bytes
+        }
+        printf("CC: %d |   ", cc[ic]);
+    }
+    printf("\n\n");
+}
+
+
+void bms_checkRxFault(uint8_t data[DATA_LEN * TOTAL_IC], uint16_t pec[TOTAL_IC], uint8_t cc[TOTAL_IC])
+{
+    bool errorIndex[TOTAL_IC];
+
+    if (!bms_checkRxPec(data, pec, cc, errorIndex))
+    {
+        printf("WARNING! PEC ERROR - IC:");
+        for(int ic = 0; ic < TOTAL_IC; ic++)
+        {
+            if (!errorIndex[ic])
+            {
+                printf(" %d,", ic+1);
+            }
+        }
+        printf("\n");
+    }
+
+    // TODO: Add command counter fault checker
+    // TODO: Add fault handler for PEC fault
+}
+
+
+// used mostly for debugging purposes
+void bms_readSid(void)
+{
+    bms_recieveData(RDSID, rxData, rxPec, rxCc);
+    printf("SID: \n");
+    bms_checkRxFault(rxData, rxPec, rxCc);
+    bms_printRawData(rxData, rxCc);
+}
+
+
+void bms_readConfigA(void)
+{
+    bms_recieveData(RDCFGA, rxData, rxPec, rxCc);
+    printf("CFGA: \n");
+    bms_checkRxFault(rxData, rxPec, rxCc);
+    bms_printRawData(rxData, rxCc);
+}
+
+
+void bms_readConfigB(void)
+{
+    bms_recieveData(RDCFGB, rxData, rxPec, rxCc);
+    printf("CFGB: \n");
+    bms_checkRxFault(rxData, rxPec, rxCc);
+    bms_printRawData(rxData, rxCc);
 }
 
 
