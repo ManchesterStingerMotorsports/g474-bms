@@ -27,6 +27,9 @@ void bms_spiRecieveData(uint8_t rxData[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTA
 
 bool bms_checkRxPec(uint8_t rxData[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC], bool errorIndex[TOTAL_IC]);
 
+
+void bms_transmitCmd(uint8_t cmd[CMD_LEN]);
+
 void bms_transmitData(uint8_t cmd[CMD_LEN], uint8_t txBuffer[DATA_LEN * TOTAL_IC]);
 
 void bms_recieveData(uint8_t cmd[CMD_LEN], uint8_t rxBuffer[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC]);

@@ -169,6 +169,9 @@ int main(void)
 
         bms_readConfigA();
         bms68_toggleGpo4();
+
+        bms_startAdcvCont();
+
         bms_readConfigA();
 
 

@@ -52,7 +52,6 @@ uint8_t UNSNAP[2]        = { 0x00, 0x2F };
 uint8_t SRST[2]          = { 0x00, 0x27 };
 
 
-
 /// ----------------------- 2950 ONLY ------------------------------- ///
 
 
@@ -245,7 +244,61 @@ uint8_t PLAUX2[2]        = { 0x07, 0x1F };
 uint8_t DIAGN[2]         = {0x07 , 0x15};
 
 /* Mute and Unmute commands */
-uint8_t MUTE[2] 	       = { 0x00, 0x28 };
+uint8_t MUTE[2] 	     = { 0x00, 0x28 };
 uint8_t UNMUTE[2]        = { 0x00, 0x29 };
+
+
+
+
+//---------------------------------------------------------------//
+
+
+
+ADCV_t const ADCV_default =
+{
+    .RD   = 0,
+    .RES2 = 0b01,
+    .X    = 0b00000,
+
+    .OW   = 0,
+    .RSTF = 0,
+    .RES0 = 0b0,
+    .DCP  = 0,
+    .RES1 = 0b11,
+    .CONT = 0,
+
+};
+
+ADCV_t ADCV = ADCV_default;
+
+
+
+
+//.OW   = 0,
+//.RSTF = 0,
+//.RES0 = 0b0,
+//.DCP  = 0,
+//.RES1 = 0b11,
+//.CONT = 0,
+//.RD   = 0,
+//.RES2 = 0b01,
+//.X    = 0b00000
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

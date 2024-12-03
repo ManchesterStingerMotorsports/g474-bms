@@ -238,3 +238,41 @@ extern uint8_t DIAGN[2];
 extern uint8_t MUTE[2];
 extern uint8_t UNMUTE[2];
 
+
+//-----------------------------------------------------------//
+
+typedef struct
+{
+    uint8_t       RD  : 1;
+    uint8_t       RES2: 2;
+    uint8_t       X   : 5;
+
+    uint8_t       OW  : 2;
+    uint8_t       RSTF: 1;
+    uint8_t       RES0: 1;
+    uint8_t       DCP : 1;
+    uint8_t       RES1: 2;
+    uint8_t       CONT: 1;
+} ADCV_t;
+
+
+extern const ADCV_t ADCV_default;
+
+extern ADCV_t ADCV;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

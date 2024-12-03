@@ -40,6 +40,8 @@ void bms_readConfigB(void);
 void bms68_toggleGpo4(void);
 
 
+void bms_startAdcvCont(void);
+
 
 
 
