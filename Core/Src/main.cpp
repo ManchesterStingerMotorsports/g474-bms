@@ -171,6 +171,7 @@ int main(void)
         bms68_toggleGpo4();
 
         bms_startAdcvCont();
+        bms_readAvgCellVoltage();
 
         bms_readConfigA();
 

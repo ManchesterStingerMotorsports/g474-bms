@@ -33,6 +33,9 @@ uint8_t  rxData[TOTAL_IC * DATA_LEN];
 uint16_t rxPec[TOTAL_IC];
 uint8_t  rxCc[TOTAL_IC];
 
+float avgCellV[TOTAL_IC-1][16];
+
+
 
 void bms_resetConfig(void)
 {
@@ -181,6 +184,33 @@ void bms_startAdcvCont(void)
     bms_stopTimer();
 
     printf("Time: %ld us\n", time);
+}
+
+
+void bms_parseVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], uint8_t cell_index)
+{
+    for (int ic = 1; ic < TOTAL_IC; ic++)
+    {
+        for (int c = cell_index*3; c < (cell_index*3 + 3); c++)
+        {
+            avgCellV[ic-1][c] = *((int16_t *)(rawData + ic*6)) * 0.00015 + 1.5;
+            printf("Cell %d = %.5fV | ", c, avgCellV[ic-1][c]);
+            if (cell_index == 5)
+            {
+                break;
+            }
+        }
+        printf("\n");
+    }
+}
+
+
+void bms_readAvgCellVoltage(void)
+{
+    bms_recieveData(RDACA, rxData, rxPec, rxCc);
+    printf("RDACA: \n");
+    bms_checkRxFault(rxData, rxPec, rxCc);
+    bms_parseVoltage(rxData, 0);
 }
 
 
