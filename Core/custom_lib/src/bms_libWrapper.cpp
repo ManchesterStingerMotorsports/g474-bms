@@ -117,8 +117,9 @@ void bms_printRawData(uint8_t data[DATA_LEN * TOTAL_IC], uint8_t cc[TOTAL_IC])
 }
 
 
-void bms_checkRxFault(uint8_t data[DATA_LEN * TOTAL_IC], uint16_t pec[TOTAL_IC], uint8_t cc[TOTAL_IC])
+bool bms_checkRxFault(uint8_t data[DATA_LEN * TOTAL_IC], uint16_t pec[TOTAL_IC], uint8_t cc[TOTAL_IC])
 {
+    bool faultDetected = false;
     bool errorIndex[TOTAL_IC];
 
     if (!bms_checkRxPec(data, pec, cc, errorIndex))
@@ -132,7 +133,10 @@ void bms_checkRxFault(uint8_t data[DATA_LEN * TOTAL_IC], uint16_t pec[TOTAL_IC],
             }
         }
         printf("\n");
+        faultDetected = true;
     }
+
+    return faultDetected;
 
     // TODO: Add command counter fault checker
     // TODO: Add fault handler for PEC fault
@@ -210,9 +214,46 @@ void bms_parseVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], uint8_t cell_index)
 void bms_readAvgCellVoltage(void)
 {
     bms_recieveData(RDACA, rxData, rxPec, rxCc);
-    printf("RDACA: \n");
-    bms_checkRxFault(rxData, rxPec, rxCc);
+    if (bms_checkRxFault(rxData, rxPec, rxCc))
+    {
+        return;
+    }
     bms_parseVoltage(rxData, 0);
+
+    bms_recieveData(RDACB, rxData, rxPec, rxCc);
+    if (bms_checkRxFault(rxData, rxPec, rxCc))
+    {
+        return;
+    }
+    bms_parseVoltage(rxData, 1);
+
+    bms_recieveData(RDACC, rxData, rxPec, rxCc);
+    if (bms_checkRxFault(rxData, rxPec, rxCc))
+    {
+        return;
+    }
+    bms_parseVoltage(rxData, 2);
+
+    bms_recieveData(RDACD, rxData, rxPec, rxCc);
+    if (bms_checkRxFault(rxData, rxPec, rxCc))
+    {
+        return;
+    }
+    bms_parseVoltage(rxData, 3);
+
+    bms_recieveData(RDACE, rxData, rxPec, rxCc);
+    if (bms_checkRxFault(rxData, rxPec, rxCc))
+    {
+        return;
+    }
+    bms_parseVoltage(rxData, 4);
+
+    bms_recieveData(RDACF, rxData, rxPec, rxCc);
+    if (bms_checkRxFault(rxData, rxPec, rxCc))
+    {
+        return;
+    }
+    bms_parseVoltage(rxData, 5);
 }
 
 
