@@ -194,7 +194,9 @@ void bms_parseVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], uint8_t cell_index)
         for (int c = cell_index*3; c < (cell_index*3 + 3); c++)
         {
             avgCellV[ic-1][c] = *((int16_t *)(rawData + ic*6)) * 0.00015 + 1.5;
+
             printf("Cell %d = %.5fV | ", c, avgCellV[ic-1][c]);
+
             if (cell_index == 5)
             {
                 break;

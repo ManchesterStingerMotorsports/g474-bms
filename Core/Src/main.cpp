@@ -45,6 +45,15 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
+enum
+{
+    ACTIVE,
+    BALANCING,
+    CHARGING,
+    INACTIVE,
+} bmsState;
+
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -151,37 +160,42 @@ int main(void)
     uint32_t timeStart;
 
     printf("Start Program \n\n");
-
     bms_readSid();
+
+    bmsState = INACTIVE;
 
     while (1)
     {
+        switch(bmsState)
+        {
 
-        timeStart = getRuntimeMs();
+        case ACTIVE:
 
+            timeStart = getRuntimeMs();
 
-//        AD68_NS::adBms6830_start_adc_cell_voltage_measurment(TOTAL_IC);
-//        HAL_Delay(1);
-//        AD68_NS::adBms6830_read_cell_voltages(TOTAL_IC, AD68_NS::IC);
-//        AD29_NS::adi2950_read_device_sid(TOTAL_IC, AD29_NS::IC);
-//        readDaisyChainSID();
+            bms_readConfigA();
+            bms68_toggleGpo4();
 
+            bms_startAdcvCont();
+            bms_readAvgCellVoltage();
 
-        bms_readConfigA();
-        bms68_toggleGpo4();
-
-        bms_startAdcvCont();
-        bms_readAvgCellVoltage();
-
-        bms_readConfigA();
+            bms_readConfigA();
 
 
-        timeDiff = getRuntimeMsDiff(timeStart);
-        sprintf(message, "Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
-        HAL_UART_Transmit(&hlpuart1, (uint8_t*)message, strlen(message), HAL_MAX_DELAY);
+            timeDiff = getRuntimeMsDiff(timeStart);
+            sprintf(message, "Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
+            HAL_UART_Transmit(&hlpuart1, (uint8_t*)message, strlen(message), HAL_MAX_DELAY);
 
-        HAL_Delay(1000);
 
+            bmsState = INACTIVE;
+
+        case INACTIVE:
+            break;
+        default:
+            break;
+        }
+
+        HAL_Delay(1);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -521,183 +535,15 @@ uint32_t getRuntimeMsDiff(uint32_t startTime)
     return HAL_GetTick() - startTime; // Divide 10 to get 10ms
 }
 
-//
-//void readDaisyChainSID(void)
-//{
-//    uint8_t  rxBuff_data[6 * TOTAL_IC] = {0};       // 6 Data (not including 2 DPEC) per IC
-//    uint16_t rxBuff_pec[TOTAL_IC] = {0};            // Data PEC
-//    uint8_t  rxBuff_cc[TOTAL_IC] = {0};             // Command counter
-//    bool     errorIndex[TOTAL_IC] = {0};
-//
-//    bms_wakeupChain();                              // IC wakeup
-//
-//    bms_csLow();                                                // Start SPI Comms
-//    bms_spiTransmitCmd(RDSID);                                  // Send command
-//    bms_spiRecieveData(rxBuff_data, rxBuff_pec, rxBuff_cc);     // read incoming bytes
-//    bms_csHigh();                                               // End SPI Comms
-//
-//    bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
-//
-//    for(int ic = 0; ic < TOTAL_IC; ic++)
-//    {
-//        printf("IC%d: \n", ic+1);
-//        if (errorIndex[ic])
-//        {
-//            printf("SID: ");
-//            for (int j = 0; j < 6; j++)                     // For every byte recieved (6 bytes)
-//            {
-//                printf("0x%02X, ", rxBuff_data[j + ic*6]);  // Print each of the bytes
-//            }
-//            printf(" // Command Counter: %d \n", rxBuff_cc[ic]);     // Print command counter
-//        }
-//        else // If PEC error
-//        {
-//            printf("WARNING! PEC ERROR \n");
-//        }
-//    }
-//}
-//
-//
-//void readCFG()
-//{
-//    uint8_t  rxBuff_data[6 * TOTAL_IC] = {0};       // 6 Data (not including 2 DPEC) per IC
-//    uint16_t rxBuff_pec[TOTAL_IC] = {0};            // Data PEC
-//    uint8_t  rxBuff_cc[TOTAL_IC] = {0};             // Command counter
-//    bool     errorIndex[TOTAL_IC] = {0};
-//
-//    bms_wakeupChain();                              // IC wakeup
-//
-//    bms_csLow();                                                // Start SPI Comms
-//    bms_spiTransmitCmd(RDCFGA);                                 // Send command
-//    bms_spiRecieveData(rxBuff_data, rxBuff_pec, rxBuff_cc);     // read incoming bytes
-//    bms_csHigh();                                               // End SPI Comms
-//
-//    ad29_cfa_t ad29_cfa;
-//    ad68_cfa_t ad68_cfa;
-//    memcpy(&ad29_cfa, rxBuff_data, DATA_LEN);
-//    memcpy(&ad68_cfa, rxBuff_data + DATA_LEN, DATA_LEN);
-//
-//    bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
-//
-//    for (int ic = 0; ic < TOTAL_IC; ic++)
-//    {
-//        if (ic == 0) continue;
-//
-//        printf("IC%d: \n", ic+1);
-//        if (errorIndex[ic])
-//        {
-//            printf("CFGA: ");
-//            for (int j = 0; j < 6; j++)                     // For every byte recieved (6 bytes)
-//            {
-//                printf("0x%02X, ", rxBuff_data[j + ic*6]);  // Print each of the bytes
-//            }
-//            printf(" // Command Counter: %d \n", rxBuff_cc[ic]);     // Print command counter
-//        }
-//        else // If PEC error
-//        {
-//            printf("WARNING! PEC ERROR \n");
-//        }
-//    }
 
-//    bms_wakeupChain();
-//
-//    bms_csLow();                                                // Start SPI Comms
-//    bms_spiTransmitCmd(RDCFGB);                                 // Send command
-//    bms_spiRecieveData(rxBuff_data, rxBuff_pec, rxBuff_cc);     // read incoming bytes
-//    bms_csHigh();                                               // End SPI Comms
-//
-//    ad29_cfb_t ad29_cfb;
-//    ad68_cfb_t ad68_cfb;
-//    memcpy(&ad29_cfb, rxBuff_data, DATA_LEN);
-//    memcpy(&ad68_cfb, rxBuff_data + DATA_LEN, DATA_LEN);
-//
-//    bms_checkRxPec(rxBuff_data, rxBuff_pec, rxBuff_cc, errorIndex);
-//
-//    for(int ic = 0; ic < TOTAL_IC; ic++)
-//    {
-//        printf("IC%d: \n", ic+1);
-//        if (errorIndex[ic])
-//        {
-//            printf("CFGB: ");
-//            for (int j = 0; j < 6; j++)                     // For every byte recieved (6 bytes)
-//            {
-//                printf("0x%02X, ", rxBuff_data[j + ic*6]);  // Print each of the bytes
-//            }
-//            printf(" // Command Counter: %d \n", rxBuff_cc[ic]);     // Print command counter
-//        }
-//        else // If PEC error
-//        {
-//            printf("WARNING! PEC ERROR \n");
-//        }
-//    }
-
-    //bms_delayUs(1000000);
-//}
-
-
-
-
-//
-//
-//void initBoth(void)
-//{
-//    adBmsWakeupIc(TOTAL_IC);
-//
-//
-//    using namespace AD29_NS;
-//    {
-//        for(uint8_t cic = 0; cic < tIC; cic++)
-//        {
-//            /* Init config A */
-//            ic[cic].tx_cfga.refon = PWR_UP;
-//
-//            /* Init config B */
-//            ic[cic].tx_cfgb.vs2 = VSM_SGND;
-//        }
-//        adBmsWakeupIc(tIC);
-//
-//        AD29_NS::adBmsWriteData(tIC, &ic[0], WRCFGA, Config, A);
-//        AD29_NS::adBmsWriteData(tIC, &ic[0], WRCFGB, Config, B);
-//    }
-//
-//
-//
-//    {
-//      for(uint8_t cic = 0; cic < tIC; cic++)
-//      {
-//        /* Init config A */
-//        ic[cic].tx_cfga.refon = PWR_UP;
-//    //    ic[cic].cfga.cth = CVT_8_1mV;
-//    //    ic[cic].cfga.flag_d = ConfigA_Flag(FLAG_D0, FLAG_SET) | ConfigA_Flag(FLAG_D1, FLAG_SET);
-//    //    ic[cic].cfga.gpo = ConfigA_Gpo(GPO2, GPO_SET) | ConfigA_Gpo(GPO10, GPO_SET);
-//        ic[cic].tx_cfga.gpo = 0X3FF; /* All GPIO pull down off */
-//    //    ic[cic].cfga.soakon = SOAKON_CLR;
-//    //    ic[cic].cfga.fc = IIR_FPA256;
-//
-//        /* Init config B */
-//    //    ic[cic].cfgb.dtmen = DTMEN_ON;
-//        ic[cic].tx_cfgb.vov = SetOverVoltageThreshold(OV_THRESHOLD);
-//        ic[cic].tx_cfgb.vuv = SetUnderVoltageThreshold(UV_THRESHOLD);
-//    //    ic[cic].cfgb.dcc = ConfigB_DccBit(DCC16, DCC_BIT_SET);
-//    //    SetConfigB_DischargeTimeOutValue(tIC, &ic[cic], RANG_0_TO_63_MIN, TIME_1MIN_OR_0_26HR);
-//      }
-//      adBmsWakeupIc(tIC);
-////      adBmsWriteData(tIC, &ic[0], WRCFGA, Config, A);
-//      for(uint8_t curr_ic = 0; curr_ic < tIC; curr_ic++)
-//      {
-//        ic[curr_ic].configa.tx_data[0] = (((ic[curr_ic].tx_cfga.refon & 0x01) << 7) | (ic[curr_ic].tx_cfga.cth & 0x07));
-//        ic[curr_ic].configa.tx_data[1] = (ic[curr_ic].tx_cfga.flag_d & 0xFF);
-//        ic[curr_ic].configa.tx_data[2] = (((ic[curr_ic].tx_cfga.soakon & 0x01) << 7) | ((ic[curr_ic].tx_cfga.owrng & 0x01) << 6) | ((ic[curr_ic].tx_cfga.owa & 0x07) << 3));
-//        ic[curr_ic].configa.tx_data[3] = ((ic[curr_ic].tx_cfga.gpo & 0x00FF));
-//        ic[curr_ic].configa.tx_data[4] = ((ic[curr_ic].tx_cfga.gpo & 0x0300)>>8);
-//        ic[curr_ic].configa.tx_data[5] = (((ic[curr_ic].tx_cfga.snap & 0x01) << 5) | ((ic[curr_ic].tx_cfga.mute_st & 0x01) << 4) | ((ic[curr_ic].tx_cfga.comm_bk & 0x01) << 3) | (ic[curr_ic].tx_cfga.fc & 0x07));
-//      }
-//
-//
-//      adBmsWriteData(tIC, &ic[0], WRCFGB, Config, B);
-//    }
-//
-//}
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if(GPIO_Pin == B1_Pin) // If The INT Source Is EXTI Line9 (A9 Pin)
+    {
+        // Do something
+        bmsState = ACTIVE;
+    }
+}
 
 
 
