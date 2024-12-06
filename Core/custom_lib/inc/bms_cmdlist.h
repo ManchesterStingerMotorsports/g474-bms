@@ -241,6 +241,8 @@ extern uint8_t UNMUTE[2];
 
 //-----------------------------------------------------------//
 
+// AD68 Cell Measurement
+
 typedef struct
 {
     uint8_t       RD  : 1;
@@ -274,7 +276,31 @@ extern const ADSV_t ADSV_default;
 extern ADSV_t ADSV;
 
 
+// AD68 AUX ADC Measurement
 
+typedef struct
+{
+    uint16_t      RES : 12;
+    uint16_t      CH  :  4;
+} ADAX2_t;
+
+extern const ADAX2_t ADAX2_default;
+extern ADAX2_t ADAX2;
+
+typedef struct
+{
+    uint8_t       OW  : 1;
+    uint8_t       RES0: 2;
+    uint8_t       X   : 5;
+
+    uint8_t       CH  : 4;
+    uint8_t       RES1: 2;
+    uint8_t       CH4 : 1;
+    uint8_t       PUP : 1;
+} ADAX_t;
+
+extern const ADAX_t ADAX_default;
+extern ADAX_t ADAX;
 
 
 

@@ -40,6 +40,8 @@ float avgCellV_delta[TOTAL_IC-1];
 
 float sVoltage[TOTAL_IC-1][16];
 
+float auxV[TOTAL_IC-1][16];
+
 
 void bms_resetConfig(void)
 {
@@ -285,6 +287,22 @@ void bms_readSVoltage(void)
 }
 
 
+void bms_getAuxVoltage(void)
+{
+    uint8_t* cmdList[] = {RDAUXA, RDAUXB, RDAUXC, RDAUXD};
+
+    for (int i = 0; i < 4; i++)
+    {
+        bms_receiveData(cmdList[i], rxData, rxPec, rxCc);
+        if (bms_checkRxFault(rxData, rxPec, rxCc))
+        {
+            return;
+        }
+        bms_parseVoltage(rxData, auxV, i);
+    }
+}
+
+
 void bms_openWireCheck(void)
 {
     ADSV.CONT = 0;      // Continuous
@@ -311,6 +329,26 @@ void bms_openWireCheck(void)
 
     bms_readSVoltage();
     bms_printVoltage(sVoltage);
+}
+
+
+void bms_getCellTemp(void)
+{
+    ADAX.OW   = 0b0;
+    ADAX.CH   = 0b0000;
+    ADAX.CH4  = 0b0;
+    ADAX.PUP  = 0b0;
+
+    bms_startTimer();
+
+    bms_transmitPoll((uint8_t *)&ADAX);
+
+    uint32_t time = bms_getTimCount();
+    bms_stopTimer();
+    printf("PT: %ld us\n", time);
+
+    bms_getAuxVoltage();
+    bms_printVoltage(auxV);
 }
 
 

@@ -286,6 +286,28 @@ ADSV_t ADSV = ADSV_default;
 
 
 
+ADAX2_t const ADAX2_default =
+{
+    .RES   = 0b000001000000,
+    .CH    = 0b0000,
+};
+
+ADAX2_t ADAX2 = ADAX2_default;
+
+
+ADAX_t const ADAX_default =
+{
+    .OW   = 0b0,
+    .RES0 = 0b10,
+    .X    = 0b00000,
+
+    .CH   = 0b0000,
+    .RES1 = 0b01,
+    .CH4  = 0b0,
+    .PUP  = 0b0,
+};
+
+ADAX_t ADAX = ADAX_default;
 
 
 

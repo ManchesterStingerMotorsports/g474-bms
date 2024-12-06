@@ -183,8 +183,10 @@ int main(void)
 //            bms_delayMsActive(12);
 //            bms_readAvgCellVoltage();
 
-            bms_delayMsActive(50);
-            bms_openWireCheck();
+//            bms_delayMsActive(50);
+//            bms_openWireCheck();
+
+            bms_getCellTemp();
 
 
             timeDiff = getRuntimeMsDiff(timeStart);
