@@ -253,7 +253,6 @@ uint8_t UNMUTE[2]        = { 0x00, 0x29 };
 //---------------------------------------------------------------//
 
 
-
 ADCV_t const ADCV_default =
 {
     .RD   = 0,
@@ -266,23 +265,26 @@ ADCV_t const ADCV_default =
     .DCP  = 0,
     .RES1 = 0b11,
     .CONT = 0,
-
 };
 
 ADCV_t ADCV = ADCV_default;
 
 
+ADSV_t const ADSV_default =
+{
+    .RES2 = 0b001,
+    .X    = 0b00000,
+
+    .OW   = 0b00,
+    .RES0 = 0b10,
+    .DCP  = 0,
+    .RES1 = 0b11,
+    .CONT = 0,
+};
+
+ADSV_t ADSV = ADSV_default;
 
 
-//.OW   = 0,
-//.RSTF = 0,
-//.RES0 = 0b0,
-//.DCP  = 0,
-//.RES1 = 0b11,
-//.CONT = 0,
-//.RD   = 0,
-//.RES2 = 0b01,
-//.X    = 0b00000
 
 
 

@@ -44,6 +44,9 @@ void bms_startAdcvCont(void);
 
 void bms_readAvgCellVoltage(void);
 
+void bms_readSVoltage(void);
+
+void bms_openWireCheck(void);
 
 
 

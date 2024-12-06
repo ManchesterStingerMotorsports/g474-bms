@@ -178,9 +178,13 @@ int main(void)
 
 
             bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-            bms_delayMsActive(12);
-            bms_readAvgCellVoltage();
+
+//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+//            bms_delayMsActive(12);
+//            bms_readAvgCellVoltage();
+
+            bms_delayMsActive(50);
+            bms_openWireCheck();
 
 
             timeDiff = getRuntimeMsDiff(timeStart);

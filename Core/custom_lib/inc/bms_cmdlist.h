@@ -255,10 +255,23 @@ typedef struct
     uint8_t       CONT: 1;
 } ADCV_t;
 
-
 extern const ADCV_t ADCV_default;
-
 extern ADCV_t ADCV;
+
+typedef struct
+{
+    uint8_t       RES2: 3;
+    uint8_t       X   : 5;
+
+    uint8_t       OW  : 2;
+    uint8_t       RES0: 2;
+    uint8_t       DCP : 1;
+    uint8_t       RES1: 2;
+    uint8_t       CONT: 1;
+} ADSV_t;
+
+extern const ADSV_t ADSV_default;
+extern ADSV_t ADSV;
 
 
 
