@@ -173,19 +173,22 @@ int main(void)
 
             timeStart = getRuntimeMs();
 
-            bms_readConfigA();
-            bms68_toggleGpo4();
+
 
             bms_startAdcvCont();
             HAL_Delay(5);
             bms_readAvgCellVoltage();
 
-            bms_readConfigA();
-
 
             timeDiff = getRuntimeMsDiff(timeStart);
             sprintf(message, "Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
             HAL_UART_Transmit(&hlpuart1, (uint8_t*)message, strlen(message), HAL_MAX_DELAY);
+
+
+//            // Toggle GPIO
+//            bms_readConfigA();
+//            bms68_toggleGpo4();
+//            bms_readConfigA();
 
 
             bmsState = INACTIVE;

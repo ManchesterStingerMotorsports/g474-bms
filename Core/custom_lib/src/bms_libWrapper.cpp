@@ -198,13 +198,30 @@ void bms_parseVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], uint8_t cell_index)
         for (int c = cell_index*3; c < (cell_index*3 + 3); c++)
         {
             avgCellV[ic-1][c] = *((int16_t *)(rawData + ic*6)) * 0.00015 + 1.5;
-
-            printf("Cell %d = %.5fV | ", c, avgCellV[ic-1][c]);
-
             if (cell_index == 5)
             {
                 break;
             }
+        }
+    }
+}
+
+
+void bms_printVoltage(float vArr[TOTAL_IC-1][16])
+{
+    printf("| IC |");
+    for (int i = 0; i < 16; i++)
+    {
+        printf("   %2d    |", i+1);
+    }
+    printf("\n");
+
+    for (int ic = 0; ic < TOTAL_IC-1; ic++)
+    {
+        printf("| %2d |", ic);
+        for (int c = 0; c < 16; c++)
+        {
+            printf(" %.5f |", vArr[ic][c]);
         }
         printf("\n");
     }
@@ -213,47 +230,18 @@ void bms_parseVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], uint8_t cell_index)
 
 void bms_readAvgCellVoltage(void)
 {
-    bms_recieveData(RDACA, rxData, rxPec, rxCc);
-    if (bms_checkRxFault(rxData, rxPec, rxCc))
-    {
-        return;
-    }
-    bms_parseVoltage(rxData, 0);
+    uint8_t* cmdList[] = {RDACA, RDACB, RDACC, RDACD, RDACE, RDACF};
 
-    bms_recieveData(RDACB, rxData, rxPec, rxCc);
-    if (bms_checkRxFault(rxData, rxPec, rxCc))
+    for (int i = 0; i < 6; i++)
     {
-        return;
+        bms_recieveData(cmdList[i], rxData, rxPec, rxCc);
+        if (bms_checkRxFault(rxData, rxPec, rxCc))
+        {
+            return;
+        }
+        bms_parseVoltage(rxData, i);
     }
-    bms_parseVoltage(rxData, 1);
-
-    bms_recieveData(RDACC, rxData, rxPec, rxCc);
-    if (bms_checkRxFault(rxData, rxPec, rxCc))
-    {
-        return;
-    }
-    bms_parseVoltage(rxData, 2);
-
-    bms_recieveData(RDACD, rxData, rxPec, rxCc);
-    if (bms_checkRxFault(rxData, rxPec, rxCc))
-    {
-        return;
-    }
-    bms_parseVoltage(rxData, 3);
-
-    bms_recieveData(RDACE, rxData, rxPec, rxCc);
-    if (bms_checkRxFault(rxData, rxPec, rxCc))
-    {
-        return;
-    }
-    bms_parseVoltage(rxData, 4);
-
-    bms_recieveData(RDACF, rxData, rxPec, rxCc);
-    if (bms_checkRxFault(rxData, rxPec, rxCc))
-    {
-        return;
-    }
-    bms_parseVoltage(rxData, 5);
+    bms_printVoltage(avgCellV);
 }
 
 
