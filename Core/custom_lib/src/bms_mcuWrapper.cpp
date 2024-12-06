@@ -69,5 +69,17 @@ void bms_delayUs(uint32_t us)
 }
 
 
+void bms_delayMsActive(uint32_t ms)
+{
+    for (uint32_t i = 0; i < ms; i++)
+    {
+        bms_csLow();
+        bms_delayUs(500);
+        bms_csHigh();
+        bms_delayUs(500);
+    }
+}
+
+
 
 

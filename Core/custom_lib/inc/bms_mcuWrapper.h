@@ -25,3 +25,6 @@ void bms_wakeupChain(void);
 
 // Microsecond delay
 void bms_delayUs(uint32_t us);
+
+// Microsecond delay while preventing isospi sleep
+void bms_delayMsActive(uint32_t ms);

@@ -174,20 +174,20 @@ void bms_readConfigB(void)
 
 void bms_startAdcvCont(void)
 {
-    ADCV.CONT = 0;      // Continuous
-    ADCV.RD   = 0;      // Redundant Measurement
+    ADCV.CONT = 1;      // Continuous
+    ADCV.RD   = 1;      // Redundant Measurement
     ADCV.DCP  = 0;      // Discharge permitted
     ADCV.RSTF = 0;      // Reset filter
     ADCV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
 
     bms_startTimer();
 
-    bms_transmitPoll((uint8_t *)&ADCV);
+    bms_transmitCmd((uint8_t *)&ADCV);
 
     uint32_t time = bms_getTimCount();
     bms_stopTimer();
 
-    printf("Time: %ld us\n", time);
+    printf("Polling Time: %ld us\n", time);
 }
 
 
