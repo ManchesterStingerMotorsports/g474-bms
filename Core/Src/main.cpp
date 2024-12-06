@@ -178,7 +178,7 @@ int main(void)
 
 
             bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-            bms_startAdcvCont();
+            bms_startAdcvCont();            // Wait 8ms for the average register to fill up
             bms_readAvgCellVoltage();
 
 
@@ -191,6 +191,8 @@ int main(void)
 //            bms_readConfigA();
 //            bms68_toggleGpo4();
 //            bms_readConfigA();
+
+
 
 
             bmsState = INACTIVE;

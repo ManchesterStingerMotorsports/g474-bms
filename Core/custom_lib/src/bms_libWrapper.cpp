@@ -146,7 +146,7 @@ bool bms_checkRxFault(uint8_t data[DATA_LEN * TOTAL_IC], uint16_t pec[TOTAL_IC],
 // used mostly for debugging purposes
 void bms_readSid(void)
 {
-    bms_recieveData(RDSID, rxData, rxPec, rxCc);
+    bms_receiveData(RDSID, rxData, rxPec, rxCc);
     printf("SID: \n");
     bms_checkRxFault(rxData, rxPec, rxCc);
     bms_printRawData(rxData, rxCc);
@@ -155,7 +155,7 @@ void bms_readSid(void)
 
 void bms_readConfigA(void)
 {
-    bms_recieveData(RDCFGA, rxData, rxPec, rxCc);
+    bms_receiveData(RDCFGA, rxData, rxPec, rxCc);
     printf("CFGA: \n");
     bms_checkRxFault(rxData, rxPec, rxCc);
     bms_printRawData(rxData, rxCc);
@@ -164,7 +164,7 @@ void bms_readConfigA(void)
 
 void bms_readConfigB(void)
 {
-    bms_recieveData(RDCFGB, rxData, rxPec, rxCc);
+    bms_receiveData(RDCFGB, rxData, rxPec, rxCc);
     printf("CFGB: \n");
     bms_checkRxFault(rxData, rxPec, rxCc);
     bms_printRawData(rxData, rxCc);
@@ -174,13 +174,20 @@ void bms_readConfigB(void)
 
 void bms_startAdcvCont(void)
 {
-    ADCV.CONT = 1;      // Continuous
+    ADCV.CONT = 0;      // Continuous
     ADCV.RD   = 0;      // Redundant Measurement
     ADCV.DCP  = 0;      // Discharge permitted
     ADCV.RSTF = 0;      // Reset filter
     ADCV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
 
-    bms_transmitCmd((uint8_t *)&ADCV);
+    bms_startTimer();
+
+    bms_transmitPoll((uint8_t *)&ADCV);
+
+    uint32_t time = bms_getTimCount();
+    bms_stopTimer();
+
+    printf("Time: %ld us\n", time);
 }
 
 
@@ -227,7 +234,7 @@ void bms_readAvgCellVoltage(void)
 
     for (int i = 0; i < 6; i++)
     {
-        bms_recieveData(cmdList[i], rxData, rxPec, rxCc);
+        bms_receiveData(cmdList[i], rxData, rxPec, rxCc);
         if (bms_checkRxFault(rxData, rxPec, rxCc))
         {
             return;

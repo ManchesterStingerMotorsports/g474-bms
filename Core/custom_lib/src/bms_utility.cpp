@@ -154,7 +154,7 @@ void bms_spiTransmitData(uint8_t data[DATA_LEN * TOTAL_IC])
 }
 
 
-void bms_spiRecieveData(uint8_t rxData[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC])
+void bms_spiReceiveData(uint8_t rxData[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC])
 {
     uint8_t rawRxData[DATAPKT_LEN * TOTAL_IC];
 
@@ -173,6 +173,7 @@ void bms_spiRecieveData(uint8_t rxData[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTA
         rxPec[ic] = (uint16_t)(((rawRxData[(ic * DATAPKT_LEN) + DATA_LEN] & 0x03) << 8) | rawRxData[(ic * DATAPKT_LEN) + DATA_LEN + 1]);
     }
 }
+
 
 
 bool bms_checkRxPec(uint8_t rxData[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC], bool errorIndex[TOTAL_IC])
@@ -202,6 +203,22 @@ void bms_transmitCmd(uint8_t cmd[CMD_LEN])
 }
 
 
+void bms_transmitPoll(uint8_t cmd[CMD_LEN])
+{
+    bms_csLow();
+    bms_spiTransmitCmd(cmd);
+
+    // Wait until receive 0xFF
+    uint8_t buff = 0;
+    while (buff == 0x00)
+    {
+        HAL_SPI_Receive(hspi, &buff, 1, HAL_MAX_DELAY);
+    }
+
+    bms_csHigh();
+}
+
+
 void bms_transmitData(uint8_t cmd[CMD_LEN], uint8_t txBuffer[DATA_LEN * TOTAL_IC])
 {
     bms_csLow();
@@ -211,11 +228,11 @@ void bms_transmitData(uint8_t cmd[CMD_LEN], uint8_t txBuffer[DATA_LEN * TOTAL_IC
 }
 
 
-void bms_recieveData(uint8_t cmd[CMD_LEN], uint8_t rxBuffer[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC])
+void bms_receiveData(uint8_t cmd[CMD_LEN], uint8_t rxBuffer[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC])
 {
     bms_csLow();
     bms_spiTransmitCmd(cmd);
-    bms_spiRecieveData(rxBuffer, rxPec, rxCc);
+    bms_spiReceiveData(rxBuffer, rxPec, rxCc);
     bms_csHigh();
 }
 
