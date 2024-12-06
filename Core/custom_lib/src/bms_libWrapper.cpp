@@ -196,7 +196,7 @@ void bms_parseVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], float vArr[TOTAL_IC-
     {
         for (int c = cell_index*3; c < (cell_index*3 + 3); c++)
         {
-            vArr[ic-1][c] = *((int16_t *)(rawData + ic*6)) * 0.00015 + 1.5;
+            vArr[ic-1][c] = *((int16_t *)(rawData + ic*6 + (c-cell_index*3)*2)) * 0.00015 + 1.5;
             if (cell_index == 5)
             {
                 break;
@@ -299,6 +299,11 @@ void bms_getAuxVoltage(void)
             return;
         }
         bms_parseVoltage(rxData, auxV, i);
+
+        if (i == 3)
+        {
+            auxV[0][11] = (*((int16_t *)(rxData+10)) * 0.00015 + 1.5) * 25;
+        }
     }
 }
 
@@ -346,6 +351,8 @@ void bms_getCellTemp(void)
     uint32_t time = bms_getTimCount();
     bms_stopTimer();
     printf("PT: %ld us\n", time);
+
+    bms_delayMsActive(20);
 
     bms_getAuxVoltage();
     bms_printVoltage(auxV);
