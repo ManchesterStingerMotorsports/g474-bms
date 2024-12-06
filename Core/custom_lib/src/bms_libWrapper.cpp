@@ -34,6 +34,10 @@ uint16_t rxPec[TOTAL_IC];
 uint8_t  rxCc[TOTAL_IC];
 
 float avgCellV[TOTAL_IC-1][16];
+float avgCellV_sum[TOTAL_IC-1];
+float avgCellV_avg[TOTAL_IC-1];
+float avgCellV_delta[TOTAL_IC-1];
+
 float sVoltage[TOTAL_IC-1][16];
 
 
@@ -197,6 +201,32 @@ void bms_parseVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], float vArr[TOTAL_IC-
             }
         }
     }
+
+    for (int ic = 0; ic < TOTAL_IC-1; ic++)
+    {
+        float min = 999.0;
+        float max = -999.0;
+        float sum = 0;
+
+        for (int c = 0; c < TOTAL_CELL; c++)
+        {
+            float voltage = vArr[ic][c];
+            sum += voltage;
+            if (voltage > max)
+            {
+                max = voltage;
+            }
+            if (voltage < min)
+            {
+                min = voltage;
+            }
+        }
+
+        avgCellV_sum[ic]   = sum;
+        avgCellV_avg[ic]   = sum / 16.0;
+        avgCellV_delta[ic] = max - min;
+    }
+
 }
 
 
@@ -205,17 +235,19 @@ void bms_printVoltage(float vArr[TOTAL_IC-1][16])
     printf("| IC |");
     for (int i = 0; i < 16; i++)
     {
-        printf("    %2d    |", i+1);
+        printf("   %2d   |", i+1);
     }
-    printf("\n");
+    printf("  Sum   |  Delta |\n");
 
     for (int ic = 0; ic < TOTAL_IC-1; ic++)
     {
         printf("| %2d |", ic);
         for (int c = 0; c < 16; c++)
         {
-            printf(" %8.5f |", vArr[ic][c]);
+            printf("%8.5f|", vArr[ic][c]);
         }
+        printf("%8.5f|",avgCellV_sum[ic]);
+        printf("%8.5f|",avgCellV_delta[ic]);
         printf("\n");
     }
 }
@@ -234,7 +266,6 @@ void bms_readAvgCellVoltage(void)
         }
         bms_parseVoltage(rxData, avgCellV, i);
     }
-//    bms_printVoltage(avgCellV);
 }
 
 
@@ -250,7 +281,6 @@ void bms_readSVoltage(void)
             return;
         }
         bms_parseVoltage(rxData, sVoltage, i);
-        printf("CC: %d\n", rxCc[1]);
     }
 }
 
