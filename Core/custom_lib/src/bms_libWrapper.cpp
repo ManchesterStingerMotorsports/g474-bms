@@ -180,14 +180,7 @@ void bms_startAdcvCont(void)
     ADCV.RSTF = 0;      // Reset filter
     ADCV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
 
-    bms_startTimer();
-
     bms_transmitCmd((uint8_t *)&ADCV);
-
-    uint32_t time = bms_getTimCount();
-    bms_stopTimer();
-
-    printf("Time: %ld us\n", time);
 }
 
 
@@ -212,7 +205,7 @@ void bms_printVoltage(float vArr[TOTAL_IC-1][16])
     printf("| IC |");
     for (int i = 0; i < 16; i++)
     {
-        printf("   %2d    |", i+1);
+        printf("    %2d    |", i+1);
     }
     printf("\n");
 
@@ -221,7 +214,7 @@ void bms_printVoltage(float vArr[TOTAL_IC-1][16])
         printf("| %2d |", ic);
         for (int c = 0; c < 16; c++)
         {
-            printf(" %.5f |", vArr[ic][c]);
+            printf(" %8.5f |", vArr[ic][c]);
         }
         printf("\n");
     }
