@@ -46,11 +46,15 @@ float auxV[TOTAL_IC-1][16];
 void bms_resetConfig(void)
 {
     // Obtained from RDCFG after reset
-    // 0x00 added at LSB due to Little endian
-    uint64_t const ad29_cfaDefault = 0x0000003F3F1100;
-    uint64_t const ad29_cfbDefault = 0x0000000001F000;
-    uint64_t const ad68_cfaDefault = 0x010000FF030000;
-    uint64_t const ad68_cfbDefault = 0x00F87F00000000;
+    // Flipped due to Little endian
+//    uint64_t const ad29_cfaDefault = 0x00 00 00 3F 3F 11;
+    uint64_t const ad29_cfaDefault = 0x113F3F000000;
+//    uint64_t const ad29_cfbDefault = 0x00 00 00 00 01 F0;
+    uint64_t const ad29_cfbDefault = 0xF00100000000;
+//    uint64_t const ad68_cfaDefault = 0x01 00 00 FF 03 00;
+    uint64_t const ad68_cfaDefault = 0x0003FF000001;
+//    uint64_t const ad68_cfbDefault = 0x00 F8 7F 00 00 00;
+    uint64_t const ad68_cfbDefault = 0x0000007FF800;
 
     // Copy defaults to Tx Buffer
     memcpy(&ad29_cfaTx, &ad29_cfaDefault, DATA_LEN);
@@ -61,6 +65,9 @@ void bms_resetConfig(void)
         memcpy(&ad68_cfaTx[ic], &ad68_cfaDefault, DATA_LEN);
         memcpy(&ad68_cfbTx[ic], &ad68_cfbDefault, DATA_LEN);
     }
+
+    ad68_cfa_t ad68_cfaT;
+    memcpy(&ad68_cfaT, &ad68_cfaDefault, DATA_LEN);
 }
 
 
@@ -100,9 +107,11 @@ void bms_writeConfigB(void)
 }
 
 
-void bms68_toggleGpo4(void)
+void bms68_setGpo45(uint8_t twoBitIndex)
 {
-    ad68_cfaTx[0].gpo1to8  ^= (1u << (4-1));
+    // GPIO Output: 1 = No pulldown (Default), 0 = Pulldown
+    // Only for pin 4 and 5
+    ad68_cfaTx[0].gpo1to8  = ((twoBitIndex) << 3) | (0xFF ^ (0x3 << 3));
     bms_writeConfigA();
 }
 
@@ -344,18 +353,37 @@ void bms_getCellTemp(void)
     ADAX.CH4  = 0b0;
     ADAX.PUP  = 0b0;
 
-    bms_startTimer();
+//    bms_startTimer();
 
-    bms_transmitPoll((uint8_t *)&ADAX);
+//    printf("%d\n",rxCc[1]);
+    bms68_setGpo45(0b10);
+    bms_delayMsActive(5);
 
-    uint32_t time = bms_getTimCount();
-    bms_stopTimer();
-    printf("PT: %ld us\n", time);
-
-    bms_delayMsActive(20);
-
+    bms_transmitCmd((uint8_t *)&ADAX);
+    bms_transmitPoll(PLAUX1);
+//    bms_delayMsActive(20);
     bms_getAuxVoltage();
     bms_printVoltage(auxV);
+    bms_wakeupChain();
+
+//    printf("%d\n",rxCc[1]);
+    bms68_setGpo45(0b01);
+    bms_delayMsActive(5);
+
+    bms_transmitCmd((uint8_t *)&ADAX);
+    bms_transmitPoll(PLAUX1);
+//    bms_delayMsActive(20);
+    bms_getAuxVoltage();
+    bms_printVoltage(auxV);
+    bms_wakeupChain();
+
+//    printf("%d\n",rxCc[1]);
+    bms68_setGpo45(0b11);
+    bms_delayMsActive(5);
+
+//    uint32_t time = bms_getTimCount();
+//    bms_stopTimer();
+//    printf("PT: %ld us\n", time);
 }
 
 

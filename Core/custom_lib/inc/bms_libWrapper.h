@@ -36,8 +36,7 @@ void bms_readConfigB(void);
 
 
 
-
-void bms68_toggleGpo4(void);
+void bms68_setGpo45(uint8_t twoBitIndex);
 
 
 void bms_startAdcvCont(void);

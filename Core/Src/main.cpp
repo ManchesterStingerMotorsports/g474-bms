@@ -175,8 +175,6 @@ int main(void)
 
             timeStart = getRuntimeMs();
 
-
-
             bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
 
 //            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
@@ -187,7 +185,6 @@ int main(void)
 //            bms_openWireCheck();
 
             bms_getCellTemp();
-
 
             timeDiff = getRuntimeMsDiff(timeStart);
             sprintf(message, "Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
