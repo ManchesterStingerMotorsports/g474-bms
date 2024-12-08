@@ -45,6 +45,38 @@ float cellTemp[TOTAL_IC-1][16];
 float segmentVoltage[TOTAL_IC-1];
 float dieTemp[TOTAL_IC-1];
 
+typedef struct
+{
+    ad29_cfa_t cfa_Tx;
+    ad29_cfa_t cfa_Rx;
+    ad29_cfb_t cfb_Tx;
+    ad29_cfb_t cfb_Rx;
+} ic_ad29_t;
+
+typedef struct
+{
+    ad68_cfa_t cfa_Tx;
+    ad68_cfa_t cfa_Rx;
+    ad68_cfb_t cfb_Tx;
+    ad68_cfb_t cfb_Rx;
+
+    float v_avgCell[16];
+    float v_avgCell_sum;
+    float v_avgCell_avg;
+    float v_avgCell_delta;
+
+    float v_sCell[16];
+
+    float v_tempSens[16];
+    float v_segment;
+
+    float temp_cell[16];
+    float temp_ic;
+} ic_ad68_t;
+
+ic_ad29_t ic_ad29[1];
+ic_ad68_t ic_ad68[TOTAL_IC-1];
+
 
 
 void bms_resetConfig(void)
