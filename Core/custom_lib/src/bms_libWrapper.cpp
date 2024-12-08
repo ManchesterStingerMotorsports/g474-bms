@@ -229,7 +229,7 @@ void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], float vArr[TOTAL_
     {
         if (cell_index == 4)
         {
-            dieTemp[ic]        = (*((int16_t *)(rxData+8 )) * 0.00015 + 1.5) / 0.0075 - 273;
+            dieTemp[ic-1] = (*((int16_t *)(rawData + ic*6 + 2)) * 0.00015 + 1.5) / 0.0075 - 273;
             continue;
         }
 
@@ -312,7 +312,7 @@ void bms_printTemps(float tArr[TOTAL_IC-1][16])
     printf("| IC |");
     for (int i = 0; i < TOTAL_CELL; i++)
     {
-        printf("  %2d |", i+1);
+        printf("  %2d   |", i+1);
     }
     printf("\n");
 
@@ -321,7 +321,7 @@ void bms_printTemps(float tArr[TOTAL_IC-1][16])
         printf("| %2d |", ic);
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-            printf("%5.2f|", tArr[ic][c]);
+            printf("%6.1f |", tArr[ic][c]);
         }
         printf("\n");
     }
@@ -359,20 +359,18 @@ void bms_readSVoltage(void)
     }
 }
 
-static volatile uint8_t muxIndex = 0;
 
-void bms_getAuxVoltage(void)
+void bms_getAuxVoltage(uint8_t muxIndex)
 {
-
     uint8_t* cmdList[] = {RDAUXA, RDAUXB, RDAUXC, RDAUXD, RDSTATA};
 
     for (int i = 0; i < 5; i++)
     {
         bms_receiveData(cmdList[i], rxData, rxPec, rxCc);
-        if (bms_checkRxFault(rxData, rxPec, rxCc))
-        {
-            return;
-        }
+//        if (bms_checkRxFault(rxData, rxPec, rxCc))
+//        {
+//            return;
+//        }
         bms_parseAuxVoltage(rxData, tempSensV, i, muxIndex);
     }
 
@@ -427,7 +425,7 @@ float convertCellTemp(float cellVoltage)
     if (cellVoltage > 2.44 || cellVoltage < 1.30)
     {
         // Voltage out of range
-        return 999999;
+        return 777.7;
     }
 
     int idx;
@@ -464,7 +462,7 @@ void bms_getAuxMeasurement(void)
     ADAX.CH4  = 0b0;
     ADAX.PUP  = 0b0;
 
-    bms_startTimer();
+//    bms_startTimer();
 
     bms68_setGpo45(0b10);
     bms_delayMsActive(5);
@@ -472,33 +470,33 @@ void bms_getAuxMeasurement(void)
     bms_transmitCmd((uint8_t *)&ADAX);
     bms_transmitPoll(PLAUX1);
 
-    bms_getAuxVoltage();
-
-    bms_printVoltage(tempSensV);
-    bms_wakeupChain();
+    bms_getAuxVoltage(0);
+//    bms_printVoltage(tempSensV);
+//    bms_wakeupChain();
 
     bms68_setGpo45(0b01);
     bms_delayMsActive(5);
 
+
     bms_transmitCmd((uint8_t *)&ADAX);
     bms_transmitPoll(PLAUX1);
 
-    bms_getAuxVoltage();
-    bms_printVoltage(tempSensV);
-
-    bms_wakeupChain();
+    bms_getAuxVoltage(1);
+//    bms_printVoltage(tempSensV);
+//    bms_wakeupChain();
 
     bms68_setGpo45(0b11);
     bms_delayMsActive(5);
 
+    bms_parseTemps();
     bms_printTemps(cellTemp);
 
     printf("dieTemp: %f\n", dieTemp[0]);
     printf("SegVoltage: %f\n", segmentVoltage[0]);
 
-    uint32_t time = bms_getTimCount();
-    bms_stopTimer();
-    printf("PT: %ld us\n", time);
+//    uint32_t time = bms_getTimCount();
+//    bms_stopTimer();
+//    printf("PT: %ld us\n", time);
 }
 
 
