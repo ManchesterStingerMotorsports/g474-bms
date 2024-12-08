@@ -47,7 +47,7 @@ void bms_readSVoltage(void);
 
 void bms_openWireCheck(void);
 
-void bms_getCellTemp(void);
+void bms_getAuxMeasurement(void);
 
 
 

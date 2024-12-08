@@ -184,7 +184,8 @@ int main(void)
 //            bms_delayMsActive(50);
 //            bms_openWireCheck();
 
-            bms_getCellTemp();
+            bms_getAuxMeasurement();
+
 
             timeDiff = getRuntimeMsDiff(timeStart);
             sprintf(message, "Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
