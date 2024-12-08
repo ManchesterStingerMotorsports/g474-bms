@@ -131,9 +131,9 @@ void bms_spiTransmitCmd(uint8_t cmd[CMD_LEN])
 }
 
 
-void bms_spiTransmitData(uint8_t data[DATA_LEN * TOTAL_IC])
+void bms_spiTransmitData(uint8_t data[TOTAL_IC][DATA_LEN])
 {
-    uint8_t txBuff_data[DATAPKT_LEN * TOTAL_IC];    // 6 Data + 2 DPEC per IC
+    uint8_t txBuff_data[TOTAL_IC][DATAPKT_LEN];    // 6 Data + 2 DPEC per IC
 
     for (int ic = 0; ic < TOTAL_IC; ic++)   /* The first configuration written is received by the last IC in the daisy chain */
     {
@@ -141,48 +141,47 @@ void bms_spiTransmitData(uint8_t data[DATA_LEN * TOTAL_IC])
 
         // Copy data to the txbuffer
         // First data is for the last IC
-        memcpy(txBuff_data + (ic*DATAPKT_LEN), data + (iv*DATA_LEN), DATA_LEN); // dest, src, count
+        memcpy(txBuff_data[ic], data[iv], DATA_LEN); // dest, src, count
 
         // Caclulate and add DPEC to buffer
-        uint16_t data_pec = bms_calcPec10(txBuff_data + (ic*DATA_LEN), DATA_LEN, NULL);
-        txBuff_data[(ic*DATAPKT_LEN) + DATA_LEN + 0] = (uint8_t)(data_pec >> 8);
-        txBuff_data[(ic*DATAPKT_LEN) + DATA_LEN + 1] = (uint8_t)(data_pec);
+        uint16_t data_pec = bms_calcPec10(&txBuff_data[ic][DATA_LEN], DATA_LEN, NULL);
+        txBuff_data[ic][DATA_LEN + 0] = (uint8_t)(data_pec >> 8);
+        txBuff_data[ic][DATA_LEN + 1] = (uint8_t)(data_pec);
     }
 
     // Send the whole buffer to SPI
-    HAL_SPI_Transmit(hspi, txBuff_data, DATAPKT_LEN * TOTAL_IC, HAL_MAX_DELAY);
+    HAL_SPI_Transmit(hspi, (uint8_t *)txBuff_data, DATAPKT_LEN * TOTAL_IC, HAL_MAX_DELAY);
 }
 
 
-void bms_spiReceiveData(uint8_t rxData[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC])
+void bms_spiReceiveData(uint8_t rxData[TOTAL_IC][DATA_LEN], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC])
 {
-    uint8_t rawRxData[DATAPKT_LEN * TOTAL_IC];
+    uint8_t rawRxData[TOTAL_IC][DATAPKT_LEN];
 
-    HAL_SPI_Receive(hspi, rawRxData, DATAPKT_LEN * TOTAL_IC, HAL_MAX_DELAY);
+    HAL_SPI_Receive(hspi, (uint8_t *)rawRxData, DATAPKT_LEN * TOTAL_IC, HAL_MAX_DELAY);
 
     for (int ic = 0; ic < TOTAL_IC; ic++)     /* executes for each ic in the daisy chain and packs the data */
     {
         // Store recieved data bytes to rxData
-        memcpy(rxData + (ic * DATA_LEN), rawRxData + (ic * DATAPKT_LEN), DATA_LEN);
+        memcpy(rxData[ic], rawRxData[ic], DATA_LEN);
 
         // Get command counter value and store to the array
-        rxCc[ic] = rawRxData[(ic * DATAPKT_LEN) + DATA_LEN] >> 2;              // Get the last 2 bytes and shift right by 2
+        rxCc[ic] = rawRxData[ic][DATA_LEN] >> 2;                // Get the 7th byte and shift right by 2 bits
 
         // Get received pec value from ic
         // Mask the first 3 bits from 1st byte and combine with 2nd byte
-        rxPec[ic] = (uint16_t)(((rawRxData[(ic * DATAPKT_LEN) + DATA_LEN] & 0x03) << 8) | rawRxData[(ic * DATAPKT_LEN) + DATA_LEN + 1]);
+        rxPec[ic] = (uint16_t)(((rawRxData[ic][DATA_LEN] & 0x03) << 8) | rawRxData[ic][DATA_LEN + 1]);
     }
 }
 
 
-
-bool bms_checkRxPec(uint8_t rxData[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC], bool errorIndex[TOTAL_IC])
+bool bms_checkRxPec(uint8_t rxData[TOTAL_IC][DATA_LEN], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC], bool errorIndex[TOTAL_IC])
 {
     bool pecOK = true;
 
     for (int ic = 0; ic < TOTAL_IC; ic++)
     {
-        uint16_t calculated_pec = bms_calcPec10(rxData + (ic * DATA_LEN), DATA_LEN, rxCc + ic);
+        uint16_t calculated_pec = bms_calcPec10(rxData[ic], DATA_LEN, rxCc + ic);
 
         errorIndex[ic] = true;                          // True == PEC OK
         if (calculated_pec != rxPec[ic])
@@ -219,7 +218,7 @@ void bms_transmitPoll(uint8_t cmd[CMD_LEN])
 }
 
 
-void bms_transmitData(uint8_t cmd[CMD_LEN], uint8_t txBuffer[DATA_LEN * TOTAL_IC])
+void bms_transmitData(uint8_t cmd[CMD_LEN], uint8_t txBuffer[TOTAL_IC][DATA_LEN])
 {
     bms_csLow();
     bms_spiTransmitCmd(cmd);
@@ -228,7 +227,7 @@ void bms_transmitData(uint8_t cmd[CMD_LEN], uint8_t txBuffer[DATA_LEN * TOTAL_IC
 }
 
 
-void bms_receiveData(uint8_t cmd[CMD_LEN], uint8_t rxBuffer[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC])
+void bms_receiveData(uint8_t cmd[CMD_LEN], uint8_t rxBuffer[TOTAL_IC][DATA_LEN], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC])
 {
     bms_csLow();
     bms_spiTransmitCmd(cmd);

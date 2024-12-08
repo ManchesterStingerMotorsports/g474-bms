@@ -28,8 +28,8 @@ ad68_cfb_t ad68_cfbTx[TOTAL_IC-1];
 ad68_cfa_t ad68_cfaRx[TOTAL_IC-1];
 ad68_cfb_t ad68_cfbRx[TOTAL_IC-1];
 
-uint8_t  txData[TOTAL_IC * DATA_LEN];
-uint8_t  rxData[TOTAL_IC * DATA_LEN];
+uint8_t  txData[TOTAL_IC][DATA_LEN];
+uint8_t  rxData[TOTAL_IC][DATA_LEN];
 uint16_t rxPec[TOTAL_IC];
 uint8_t  rxCc[TOTAL_IC];
 
@@ -121,14 +121,14 @@ void bms68_setGpo45(uint8_t twoBitIndex)
 
 
 
-void bms_printRawData(uint8_t data[DATA_LEN * TOTAL_IC], uint8_t cc[TOTAL_IC])
+void bms_printRawData(uint8_t data[TOTAL_IC][DATA_LEN], uint8_t cc[TOTAL_IC])
 {
     for (int ic = 0; ic < TOTAL_IC; ic++)
     {
         printf("IC%d: ", ic+1);
         for (int j = 0; j < 6; j++)              // For every byte recieved (6 bytes)
         {
-            printf("0x%02X, ", data[j + ic*6]);  // Print each of the bytes
+            printf("0x%02X, ", data[ic][j]);  // Print each of the bytes
         }
         printf("CC: %d |   ", cc[ic]);
     }
@@ -136,7 +136,7 @@ void bms_printRawData(uint8_t data[DATA_LEN * TOTAL_IC], uint8_t cc[TOTAL_IC])
 }
 
 
-bool bms_checkRxFault(uint8_t data[DATA_LEN * TOTAL_IC], uint16_t pec[TOTAL_IC], uint8_t cc[TOTAL_IC])
+bool bms_checkRxFault(uint8_t data[TOTAL_IC][DATA_LEN], uint16_t pec[TOTAL_IC], uint8_t cc[TOTAL_IC])
 {
     bool faultDetected = false;
     bool errorIndex[TOTAL_IC];
@@ -203,7 +203,7 @@ void bms_startAdcvCont(void)
 }
 
 
-void bms_parseVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], float vArr[TOTAL_IC-1][TOTAL_CELL], uint8_t cell_index)
+void bms_parseVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_IC-1][TOTAL_CELL], uint8_t cell_index)
 {
     // Does not take care of 2950
 
@@ -211,7 +211,7 @@ void bms_parseVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], float vArr[TOTAL_IC-
     {
         for (int c = cell_index*3; c < (cell_index*3 + 3); c++)
         {
-            vArr[ic-1][c] = *((int16_t *)(rawData + ic*6 + (c-cell_index*3)*2)) * 0.00015 + 1.5;
+            vArr[ic-1][c] = *((int16_t *)(rawData[ic] + (c-cell_index*3)*2)) * 0.00015 + 1.5;
             if (cell_index == 5)
             {
                 break;
@@ -221,7 +221,7 @@ void bms_parseVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], float vArr[TOTAL_IC-
 }
 
 
-void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], float vArr[TOTAL_IC-1][TOTAL_CELL], uint8_t cell_index, uint8_t muxIndex)
+void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_IC-1][TOTAL_CELL], uint8_t cell_index, uint8_t muxIndex)
 {
     // Does not take care of 2950
 
@@ -229,7 +229,7 @@ void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], float vArr[TOTAL_
     {
         if (cell_index == 4)
         {
-            dieTemp[ic-1] = (*((int16_t *)(rawData + ic*6 + 2)) * 0.00015 + 1.5) / 0.0075 - 273;
+            dieTemp[ic-1] = (*((int16_t *)(rawData[ic] + 2)) * 0.00015 + 1.5) / 0.0075 - 273;
             continue;
         }
 
@@ -244,11 +244,11 @@ void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], float vArr[TOTAL_
                 ci -= 2;
             }
 
-            vArr[ic-1][ci + 8*muxIndex] = *((int16_t *)(rawData + ic*6 + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
+            vArr[ic-1][ci + 8*muxIndex] = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
 
             if (cell_index == 3)
             {
-                segmentVoltage[ic-1] = (*((int16_t *)(rawData+10)) * 0.00015 + 1.5) * 25;
+                segmentVoltage[ic-1] = (*((int16_t *)(rawData[ic] + 4)) * 0.00015 + 1.5) * 25;
                 break;
             }
         }
@@ -341,6 +341,9 @@ void bms_readAvgCellVoltage(void)
         }
         bms_parseVoltage(rxData, avgCellV, i);
     }
+
+    bms_calculateStats();
+    bms_printVoltage(avgCellV);
 }
 
 
@@ -367,10 +370,10 @@ void bms_getAuxVoltage(uint8_t muxIndex)
     for (int i = 0; i < 5; i++)
     {
         bms_receiveData(cmdList[i], rxData, rxPec, rxCc);
-//        if (bms_checkRxFault(rxData, rxPec, rxCc))
-//        {
-//            return;
-//        }
+        if (bms_checkRxFault(rxData, rxPec, rxCc))
+        {
+            return;
+        }
         bms_parseAuxVoltage(rxData, tempSensV, i, muxIndex);
     }
 
@@ -482,8 +485,8 @@ void bms_getAuxMeasurement(void)
     bms_transmitPoll(PLAUX1);
 
     bms_getAuxVoltage(1);
-//    bms_printVoltage(tempSensV);
-//    bms_wakeupChain();
+    bms_printVoltage(tempSensV);
+    bms_wakeupChain();
 
     bms68_setGpo45(0b11);
     bms_delayMsActive(5);
