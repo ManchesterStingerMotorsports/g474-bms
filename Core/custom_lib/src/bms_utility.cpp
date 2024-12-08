@@ -144,7 +144,7 @@ void bms_spiTransmitData(uint8_t data[TOTAL_IC][DATA_LEN])
         memcpy(txBuff_data[ic], data[iv], DATA_LEN); // dest, src, count
 
         // Caclulate and add DPEC to buffer
-        uint16_t data_pec = bms_calcPec10(&txBuff_data[ic][DATA_LEN], DATA_LEN, NULL);
+        uint16_t data_pec = bms_calcPec10(txBuff_data[ic], DATA_LEN, NULL);
         txBuff_data[ic][DATA_LEN + 0] = (uint8_t)(data_pec >> 8);
         txBuff_data[ic][DATA_LEN + 1] = (uint8_t)(data_pec);
     }

@@ -16,34 +16,10 @@
 #include "main.h"
 
 
-//ad29_cfa_t ad29_cfaTx;
-//ad29_cfb_t ad29_cfbTx;
-//
-//ad29_cfa_t ad29_cfaRx;
-//ad29_cfb_t ad29_cfbRx;
-//
-//ad68_cfa_t ad68_cfaTx[TOTAL_IC-1];
-//ad68_cfb_t ad68_cfbTx[TOTAL_IC-1];
-//
-//ad68_cfa_t ad68_cfaRx[TOTAL_IC-1];
-//ad68_cfb_t ad68_cfbRx[TOTAL_IC-1];
-
 uint8_t  txData[TOTAL_IC][DATA_LEN];
 uint8_t  rxData[TOTAL_IC][DATA_LEN];
 uint16_t rxPec[TOTAL_IC];
 uint8_t  rxCc[TOTAL_IC];
-
-//float avgCellV[TOTAL_IC-1][16];
-//float avgCellV_sum[TOTAL_IC-1];
-//float avgCellV_avg[TOTAL_IC-1];
-//float avgCellV_delta[TOTAL_IC-1];
-//
-//float sVoltage[TOTAL_IC-1][16];
-//
-//float tempSensV[TOTAL_IC-1][16];
-//float cellTemp[TOTAL_IC-1][16];
-//float segmentVoltage[TOTAL_IC-1];
-//float dieTemp[TOTAL_IC-1];
 
 
 typedef struct
@@ -75,7 +51,6 @@ typedef struct
     float temp_cell[16];
     float temp_ic;
 } ic_ad68_t;
-
 
 
 ic_ad29_t ic_ad29;
