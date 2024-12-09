@@ -38,6 +38,9 @@ typedef struct
     ad68_cfb_t cfb_Tx;
     ad68_cfb_t cfb_Rx;
 
+    ad68_pwma_t pwma;
+    ad68_pwmb_t pwmb;
+
     float v_avgCell[16];
     float v_avgCell_sum;
     float v_avgCell_avg;
@@ -121,6 +124,38 @@ void bms_writeConfigB(void)
 
     // write config B
     bms_transmitData(WRCFGB, txData);
+}
+
+
+void bms_writePwmA(void)
+{
+    // Fill padding bytes for ad29
+    memset(txData[0], 0x00, DATA_LEN);
+
+    // Fill buffer with the other ad6830 data
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        memcpy(txData[ic+1], &ic_ad68[ic].pwma, DATA_LEN);
+    }
+
+    // write config A
+    bms_transmitData(WRPWM1, txData);
+}
+
+
+void bms_writePwmB(void)
+{
+    // Fill padding bytes for ad29
+    memset(txData[0], 0x00, DATA_LEN);
+
+    // Fill buffer with the other ad6830 data
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        memcpy(txData[ic+1], &ic_ad68[ic].pwmb, DATA_LEN);
+    }
+
+    // write config B
+    bms_transmitData(WRPWM2, txData);
 }
 
 
@@ -209,7 +244,7 @@ void bms_readConfigB(void)
 void bms_startAdcvCont(void)
 {
     ADCV.CONT = 1;      // Continuous
-    ADCV.RD   = 1;      // Redundant Measurement
+    ADCV.RD   = 0;      // Redundant Measurement
     ADCV.DCP  = 0;      // Discharge permitted
     ADCV.RSTF = 0;      // Reset filter
     ADCV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
@@ -260,7 +295,6 @@ void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_C
             }
 
             *((float*)((uint8_t*)vArr + (ic-1) * sizeof(ic_ad68_t)) + (ci + 8*muxIndex)) = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
-
 //            vArr[ic-1][ci + 8*muxIndex] = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
 
             if (cell_index == 3)
@@ -402,44 +436,46 @@ void bms_getAuxVoltage(uint8_t muxIndex)
         }
         bms_parseAuxVoltage(rxData, ic_ad68[0].v_tempSens, i, muxIndex);
     }
-
-    if (muxIndex == 1)
-    {
-        muxIndex = 0;
-    }
-    else
-    {
-        muxIndex = 1;
-    }
 }
 
 
 void bms_openWireCheck(void)
 {
-    ADSV.CONT = 0;      // Continuous
+    ADSV.CONT = 1;      // Continuous
     ADSV.DCP  = 0;      // Discharge permitted
-    ADSV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
-
-    bms_transmitPoll((uint8_t *)&ADSV);
-    bms_readSVoltage();
-    bms_printVoltage(ic_ad68[0].v_sCell);
-    bms_wakeupChain();
 
     bms_startTimer();
 
+    ADSV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
+    bms_transmitCmd((uint8_t *)&ADSV);
+//    bms_transmitPoll(PLSADC);
+    bms_delayMsActive(16);
+    bms_readSVoltage();
+    bms_printVoltage(ic_ad68[0].v_sCell);
+
+    // S and C is compared
+
+    ADSV.CONT = 0;      // Continuous
+    ADSV.DCP  = 0;      // Discharge permitted
+
+    bms_wakeupChain();
     ADSV.OW   = 0b10;   // Open wire on C-ADCS and S-ADCs
     bms_transmitPoll((uint8_t *)&ADSV);
+//    bms_transmitPoll(PLSADC);
+    bms_readSVoltage();
+    bms_printVoltage(ic_ad68[0].v_sCell);
+
+    bms_wakeupChain();
+    ADSV.OW   = 0b01;   // Open wire on C-ADCS and S-ADCs
+    bms_transmitPoll((uint8_t *)&ADSV);
+//    bms_transmitPoll(PLSADC);
+    bms_readSVoltage();
+    bms_printVoltage(ic_ad68[0].v_sCell);
 
     uint32_t time = bms_getTimCount();
     bms_stopTimer();
 
     printf("PT: %ld us\n", time);
-
-
-    bms_delayMsActive(50);
-
-    bms_readSVoltage();
-    bms_printVoltage(ic_ad68[0].v_sCell);
 }
 
 
@@ -501,26 +537,17 @@ void bms_getAuxMeasurement(void)
     bms_transmitPoll(PLAUX1);
 
     bms_getAuxVoltage(0);
-//    bms_printVoltage(tempSensV);
-//    bms_wakeupChain();
-
-    bms_wakeupChain();
-    bms68_setGpo45(0b01);
+    bms68_setGpo45(0b11);
     bms_delayMsActive(5);
-
 
     bms_transmitCmd((uint8_t *)&ADAX);
     bms_transmitPoll(PLAUX1);
 
     bms_getAuxVoltage(1);
-    bms_printVoltage(ic_ad68[0].v_tempSens);
-    bms_wakeupChain();
-
-    bms_wakeupChain();
-    bms68_setGpo45(0b11);
-    bms_delayMsActive(5);
+    bms68_setGpo45(0b00);
 
     bms_parseTemps();
+    bms_printVoltage(ic_ad68[0].v_tempSens);
     bms_printTemps(ic_ad68[0].temp_cell);
 
     printf("dieTemp: %f\n", ic_ad68[0].temp_ic);
@@ -531,6 +558,25 @@ void bms_getAuxMeasurement(void)
 //    printf("PT: %ld us\n", time);
 }
 
+void bms_startDischarge(void)
+{
+    memset(&ic_ad68[0].pwma, 0, sizeof(ad68_pwma_t));
+    memset(&ic_ad68[0].pwmb, 0, sizeof(ad68_pwmb_t));
 
+    ic_ad68[0].pwma.pwm1 = 0b0111;
+
+//    ic_ad68[0].cfb_Tx.dcc = 0b1; --- High priority discharge
+
+//    bms_writeConfigB();
+    bms_writePwmA();
+}
+
+
+void bms_stopDischarge(void)
+{
+    bms_wakeupChain();
+    bms_transmitCmd(SRST);      // Put all devices to sleep
+    printf("--- SOFT RESET --- \n");
+}
 
 

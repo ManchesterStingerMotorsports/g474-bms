@@ -35,4 +35,7 @@ void bms_openWireCheck(void);
 void bms_getAuxMeasurement(void);
 
 
+void bms_startDischarge(void);
+void bms_stopDischarge(void);
+
 
