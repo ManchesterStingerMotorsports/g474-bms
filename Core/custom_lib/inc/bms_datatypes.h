@@ -118,6 +118,7 @@ typedef struct
   uint8_t       unused4 :2;
 } ad68_cfa_t;
 
+
 /* For ADBMS6830 config register structure */
 typedef struct
 {
@@ -134,5 +135,42 @@ typedef struct
 
   uint16_t    dcc     :16;
 } ad68_cfb_t;
+
+
+typedef struct
+{
+    uint8_t     pwm1    :4;
+    uint8_t     pwm2    :4;
+
+    uint8_t     pwm3    :4;
+    uint8_t     pwm4    :4;
+
+    uint8_t     pwm5    :4;
+    uint8_t     pwm6    :4;
+
+    uint8_t     pwm7    :4;
+    uint8_t     pwm8    :4;
+
+    uint8_t     pwm9    :4;
+    uint8_t     pwm10   :4;
+
+    uint8_t     pwm11   :4;
+    uint8_t     pwm12   :4;
+} ad68_pwma_t;
+
+
+typedef struct
+{
+    uint8_t     pwm13   :4;
+    uint8_t     pwm14   :4;
+
+    uint8_t     pwm15   :4;
+    uint8_t     pwm16   :4;
+
+    uint32_t    rsv     :32;
+} ad68_pwmb_t;
+
+
+
 
 

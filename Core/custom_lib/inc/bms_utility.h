@@ -21,17 +21,17 @@ uint16_t bms_calcPec10(uint8_t *pDataBuf, int nLength, uint8_t *commandCounter);
 
 void bms_spiTransmitCmd(uint8_t cmd[CMD_LEN]);
 
-void bms_spiTransmitData(uint8_t data[DATA_LEN * TOTAL_IC]);
+void bms_spiTransmitData(uint8_t data[TOTAL_IC][DATA_LEN]);
 
-void bms_spiReceiveData(uint8_t rxData[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC]);
+void bms_spiReceiveData(uint8_t rxData[TOTAL_IC][DATA_LEN], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC]);
 
 
-bool bms_checkRxPec(uint8_t rxData[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC], bool errorIndex[TOTAL_IC]);
+bool bms_checkRxPec(uint8_t rxData[TOTAL_IC][DATA_LEN], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC], bool errorIndex[TOTAL_IC]);
 
 void bms_transmitCmd(uint8_t cmd[CMD_LEN]);
 
 void bms_transmitPoll(uint8_t cmd[CMD_LEN]);
 
-void bms_transmitData(uint8_t cmd[CMD_LEN], uint8_t txBuffer[DATA_LEN * TOTAL_IC]);
+void bms_transmitData(uint8_t cmd[CMD_LEN], uint8_t txBuffer[TOTAL_IC][DATA_LEN]);
 
-void bms_receiveData(uint8_t cmd[CMD_LEN], uint8_t rxBuffer[DATA_LEN * TOTAL_IC], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC]);
+void bms_receiveData(uint8_t cmd[CMD_LEN], uint8_t rxBuffer[TOTAL_IC][DATA_LEN], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC]);

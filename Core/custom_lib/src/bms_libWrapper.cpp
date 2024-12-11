@@ -16,34 +16,48 @@
 #include "main.h"
 
 
-ad29_cfa_t ad29_cfaTx;
-ad29_cfb_t ad29_cfbTx;
-
-ad29_cfa_t ad29_cfaRx;
-ad29_cfb_t ad29_cfbRx;
-
-ad68_cfa_t ad68_cfaTx[TOTAL_IC-1];
-ad68_cfb_t ad68_cfbTx[TOTAL_IC-1];
-
-ad68_cfa_t ad68_cfaRx[TOTAL_IC-1];
-ad68_cfb_t ad68_cfbRx[TOTAL_IC-1];
-
-uint8_t  txData[TOTAL_IC * DATA_LEN];
-uint8_t  rxData[TOTAL_IC * DATA_LEN];
+uint8_t  txData[TOTAL_IC][DATA_LEN];
+uint8_t  rxData[TOTAL_IC][DATA_LEN];
 uint16_t rxPec[TOTAL_IC];
 uint8_t  rxCc[TOTAL_IC];
 
-float avgCellV[TOTAL_IC-1][16];
-float avgCellV_sum[TOTAL_IC-1];
-float avgCellV_avg[TOTAL_IC-1];
-float avgCellV_delta[TOTAL_IC-1];
 
-float sVoltage[TOTAL_IC-1][16];
+typedef struct
+{
+    ad29_cfa_t cfa_Tx;
+    ad29_cfa_t cfa_Rx;
+    ad29_cfb_t cfb_Tx;
+    ad29_cfb_t cfb_Rx;
+} ic_ad29_t;
 
-float tempSensV[TOTAL_IC-1][16];
-float cellTemp[TOTAL_IC-1][16];
-float segmentVoltage[TOTAL_IC-1];
-float dieTemp[TOTAL_IC-1];
+
+typedef struct
+{
+    ad68_cfa_t cfa_Tx;
+    ad68_cfa_t cfa_Rx;
+    ad68_cfb_t cfb_Tx;
+    ad68_cfb_t cfb_Rx;
+
+    ad68_pwma_t pwma;
+    ad68_pwmb_t pwmb;
+
+    float v_avgCell[16];
+    float v_avgCell_sum;
+    float v_avgCell_avg;
+    float v_avgCell_delta;
+
+    float v_sCell[16];
+
+    float v_tempSens[16];
+    float v_segment;
+
+    float temp_cell[16];
+    float temp_ic;
+} ic_ad68_t;
+
+
+ic_ad29_t ic_ad29;
+ic_ad68_t ic_ad68[TOTAL_AD68];
 
 
 
@@ -61,13 +75,13 @@ void bms_resetConfig(void)
     uint64_t const ad68_cfbDefault = 0x0000007FF800;
 
     // Copy defaults to Tx Buffer
-    memcpy(&ad29_cfaTx, &ad29_cfaDefault, DATA_LEN);
-    memcpy(&ad29_cfbTx, &ad29_cfbDefault, DATA_LEN);
+    memcpy(&ic_ad29.cfa_Rx, &ad29_cfaDefault, DATA_LEN);
+    memcpy(&ic_ad29.cfb_Rx, &ad29_cfbDefault, DATA_LEN);
 
-    for (int ic = 0; ic < TOTAL_IC-1; ic++)
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
-        memcpy(&ad68_cfaTx[ic], &ad68_cfaDefault, DATA_LEN);
-        memcpy(&ad68_cfbTx[ic], &ad68_cfbDefault, DATA_LEN);
+        memcpy(&ic_ad68[ic].cfa_Tx, &ad68_cfaDefault, DATA_LEN);
+        memcpy(&ic_ad68[ic].cfb_Tx, &ad68_cfbDefault, DATA_LEN);
     }
 
     ad68_cfa_t ad68_cfaT;
@@ -81,33 +95,67 @@ void bms_init(void)
 }
 
 
-// Fill in the tx buffer for the 2950 and 6830 daisy chain
-void bms_setupTxBuffer(uint8_t ad29[DATA_LEN], uint8_t ad68[DATA_LEN])
-{
-    // Fill buffer for ad2950 first
-    memcpy(txData, ad29, DATA_LEN);
-
-    // Fill buffer with the other ad6830 data
-    for (int ic = 1; ic < TOTAL_IC; ic++)
-    {
-        memcpy(txData + ic*DATA_LEN, ad68, DATA_LEN);
-    }
-}
-
-
 void bms_writeConfigA(void)
 {
+    // Fill buffer for ad2950 first
+    memcpy(txData[0], &ic_ad29.cfa_Tx, DATA_LEN);
+
+    // Fill buffer with the other ad6830 data
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        memcpy(txData[ic+1], &ic_ad68[ic].cfa_Tx, DATA_LEN);
+    }
+
     // write config A
-    bms_setupTxBuffer((uint8_t *)&ad29_cfaTx, (uint8_t *)&ad68_cfaTx);
     bms_transmitData(WRCFGA, txData);
 }
 
 
 void bms_writeConfigB(void)
 {
+    // Fill buffer for ad2950 first
+    memcpy(txData[0], &ic_ad29.cfb_Tx, DATA_LEN);
+
+    // Fill buffer with the other ad6830 data
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        memcpy(txData[ic+1], &ic_ad68[ic].cfb_Tx, DATA_LEN);
+    }
+
     // write config B
-    bms_setupTxBuffer((uint8_t *)&ad29_cfbTx, (uint8_t *)&ad68_cfbTx);
     bms_transmitData(WRCFGB, txData);
+}
+
+
+void bms_writePwmA(void)
+{
+    // Fill padding bytes for ad29
+    memset(txData[0], 0x00, DATA_LEN);
+
+    // Fill buffer with the other ad6830 data
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        memcpy(txData[ic+1], &ic_ad68[ic].pwma, DATA_LEN);
+    }
+
+    // write config A
+    bms_transmitData(WRPWM1, txData);
+}
+
+
+void bms_writePwmB(void)
+{
+    // Fill padding bytes for ad29
+    memset(txData[0], 0x00, DATA_LEN);
+
+    // Fill buffer with the other ad6830 data
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        memcpy(txData[ic+1], &ic_ad68[ic].pwmb, DATA_LEN);
+    }
+
+    // write config B
+    bms_transmitData(WRPWM2, txData);
 }
 
 
@@ -115,20 +163,23 @@ void bms68_setGpo45(uint8_t twoBitIndex)
 {
     // GPIO Output: 1 = No pulldown (Default), 0 = Pulldown
     // Only for pin 4 and 5
-    ad68_cfaTx[0].gpo1to8  = ((twoBitIndex) << 3) | (0xFF ^ (0x3 << 3));
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        ic_ad68[ic].cfa_Tx.gpo1to8 = ((twoBitIndex) << 3) | (0xFF ^ (0x3 << 3));
+    }
+
     bms_writeConfigA();
 }
 
 
-
-void bms_printRawData(uint8_t data[DATA_LEN * TOTAL_IC], uint8_t cc[TOTAL_IC])
+void bms_printRawData(uint8_t data[TOTAL_IC][DATA_LEN], uint8_t cc[TOTAL_IC])
 {
     for (int ic = 0; ic < TOTAL_IC; ic++)
     {
         printf("IC%d: ", ic+1);
-        for (int j = 0; j < 6; j++)              // For every byte recieved (6 bytes)
+        for (int j = 0; j < 6; j++)             // For every byte recieved (6 bytes)
         {
-            printf("0x%02X, ", data[j + ic*6]);  // Print each of the bytes
+            printf("0x%02X, ", data[ic][j]);    // Print each of the bytes
         }
         printf("CC: %d |   ", cc[ic]);
     }
@@ -136,7 +187,7 @@ void bms_printRawData(uint8_t data[DATA_LEN * TOTAL_IC], uint8_t cc[TOTAL_IC])
 }
 
 
-bool bms_checkRxFault(uint8_t data[DATA_LEN * TOTAL_IC], uint16_t pec[TOTAL_IC], uint8_t cc[TOTAL_IC])
+bool bms_checkRxFault(uint8_t data[TOTAL_IC][DATA_LEN], uint16_t pec[TOTAL_IC], uint8_t cc[TOTAL_IC])
 {
     bool faultDetected = false;
     bool errorIndex[TOTAL_IC];
@@ -190,11 +241,10 @@ void bms_readConfigB(void)
 }
 
 
-
 void bms_startAdcvCont(void)
 {
     ADCV.CONT = 1;      // Continuous
-    ADCV.RD   = 1;      // Redundant Measurement
+    ADCV.RD   = 0;      // Redundant Measurement
     ADCV.DCP  = 0;      // Discharge permitted
     ADCV.RSTF = 0;      // Reset filter
     ADCV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
@@ -203,15 +253,16 @@ void bms_startAdcvCont(void)
 }
 
 
-void bms_parseVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], float vArr[TOTAL_IC-1][TOTAL_CELL], uint8_t cell_index)
+void bms_parseVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_CELL], uint8_t cell_index)
 {
     // Does not take care of 2950
-
     for (int ic = 1; ic < TOTAL_IC; ic++)
     {
         for (int c = cell_index*3; c < (cell_index*3 + 3); c++)
         {
-            vArr[ic-1][c] = *((int16_t *)(rawData + ic*6 + (c-cell_index*3)*2)) * 0.00015 + 1.5;
+            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(ic_ad68_t)) + c) = *((int16_t *)(rawData[ic] + (c-cell_index*3)*2)) * 0.00015 + 1.5;
+//            vArr[ic-1][c] = *((int16_t *)(rawData[ic] + (c-cell_index*3)*2)) * 0.00015 + 1.5;
+
             if (cell_index == 5)
             {
                 break;
@@ -221,15 +272,14 @@ void bms_parseVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], float vArr[TOTAL_IC-
 }
 
 
-void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], float vArr[TOTAL_IC-1][TOTAL_CELL], uint8_t cell_index, uint8_t muxIndex)
+void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_CELL], uint8_t cell_index, uint8_t muxIndex)
 {
     // Does not take care of 2950
-
     for (int ic = 1; ic < TOTAL_IC; ic++)
     {
         if (cell_index == 4)
         {
-            dieTemp[ic-1] = (*((int16_t *)(rawData + ic*6 + 2)) * 0.00015 + 1.5) / 0.0075 - 273;
+            ic_ad68[ic-1].temp_ic = (*((int16_t *)(rawData[ic] + 2)) * 0.00015 + 1.5) / 0.0075 - 273;
             continue;
         }
 
@@ -244,11 +294,12 @@ void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], float vArr[TOTAL_
                 ci -= 2;
             }
 
-            vArr[ic-1][ci + 8*muxIndex] = *((int16_t *)(rawData + ic*6 + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
+            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(ic_ad68_t)) + (ci + 8*muxIndex)) = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
+//            vArr[ic-1][ci + 8*muxIndex] = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
 
             if (cell_index == 3)
             {
-                segmentVoltage[ic-1] = (*((int16_t *)(rawData+10)) * 0.00015 + 1.5) * 25;
+                ic_ad68[ic-1].v_segment = (*((int16_t *)(rawData[ic] + 4)) * 0.00015 + 1.5) * 25;
                 break;
             }
         }
@@ -258,7 +309,7 @@ void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC * DATA_LEN], float vArr[TOTAL_
 
 void bms_calculateStats(void)
 {
-    for (int ic = 0; ic < TOTAL_IC-1; ic++)
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
         float min = 999.0;
         float max = -999.0;
@@ -266,7 +317,7 @@ void bms_calculateStats(void)
 
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-            float voltage = avgCellV[ic][c];
+            float voltage = ic_ad68[ic].v_avgCell[c];
             sum += voltage;
             if (voltage > max)
             {
@@ -277,14 +328,14 @@ void bms_calculateStats(void)
                 min = voltage;
             }
         }
-        avgCellV_sum[ic]   = sum;
-        avgCellV_avg[ic]   = sum / 16.0;
-        avgCellV_delta[ic] = max - min;
+        ic_ad68[ic].v_avgCell_sum   = sum;
+        ic_ad68[ic].v_avgCell_avg   = sum / 16.0;
+        ic_ad68[ic].v_avgCell_delta = max - min;
     }
 }
 
 
-void bms_printVoltage(float vArr[TOTAL_IC-1][16])
+void bms_printVoltage(float vArr[16])
 {
     printf("| IC |");
     for (int i = 0; i < TOTAL_CELL; i++)
@@ -293,21 +344,22 @@ void bms_printVoltage(float vArr[TOTAL_IC-1][16])
     }
     printf("  Sum   |  Delta |\n");
 
-    for (int ic = 0; ic < TOTAL_IC-1; ic++)
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
         printf("| %2d |", ic);
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-            printf("%8.5f|", vArr[ic][c]);
+            printf("%8.5f|", *((float*)((uint8_t*)vArr + ic * sizeof(ic_ad68_t)) + c));
         }
-        printf("%8.5f|",avgCellV_sum[ic]);
-        printf("%8.5f|",avgCellV_delta[ic]);
+
+        printf("%8.5f|", ic_ad68[ic].v_avgCell_sum);
+        printf("%8.5f|", ic_ad68[ic].v_avgCell_delta);
         printf("\n");
     }
 }
 
 
-void bms_printTemps(float tArr[TOTAL_IC-1][16])
+void bms_printTemps(float tArr[16])
 {
     printf("| IC |");
     for (int i = 0; i < TOTAL_CELL; i++)
@@ -316,12 +368,14 @@ void bms_printTemps(float tArr[TOTAL_IC-1][16])
     }
     printf("\n");
 
-    for (int ic = 0; ic < TOTAL_IC-1; ic++)
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
         printf("| %2d |", ic);
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-            printf("%6.1f |", tArr[ic][c]);
+//            printf("%6.1f |", tArr[ic][c]);
+            printf("%6.1f |", *((float*)((uint8_t*)tArr + ic * sizeof(ic_ad68_t)) + c));
+
         }
         printf("\n");
     }
@@ -331,6 +385,7 @@ void bms_printTemps(float tArr[TOTAL_IC-1][16])
 void bms_readAvgCellVoltage(void)
 {
     uint8_t* cmdList[] = {RDACA, RDACB, RDACC, RDACD, RDACE, RDACF};
+//    float  vBuffer[TOTAL_AD68][TOTAL_CELL];
 
     for (int i = 0; i < 6; i++)
     {
@@ -339,8 +394,16 @@ void bms_readAvgCellVoltage(void)
         {
             return;
         }
-        bms_parseVoltage(rxData, avgCellV, i);
+        bms_parseVoltage(rxData, ic_ad68[0].v_avgCell, i);
     }
+
+//    for (int ic = 0; ic < TOTAL_AD68; ic++)
+//    {
+//        memcpy(ic_ad68[ic].v_avgCell, vBuffer[ic], sizeof(vBuffer[ic]));
+//    }
+
+    bms_calculateStats();
+    bms_printVoltage(ic_ad68[0].v_avgCell);
 }
 
 
@@ -355,7 +418,7 @@ void bms_readSVoltage(void)
         {
             return;
         }
-        bms_parseVoltage(rxData, sVoltage, i);
+        bms_parseVoltage(rxData, ic_ad68[0].v_sCell, i);
     }
 }
 
@@ -367,50 +430,52 @@ void bms_getAuxVoltage(uint8_t muxIndex)
     for (int i = 0; i < 5; i++)
     {
         bms_receiveData(cmdList[i], rxData, rxPec, rxCc);
-//        if (bms_checkRxFault(rxData, rxPec, rxCc))
-//        {
-//            return;
-//        }
-        bms_parseAuxVoltage(rxData, tempSensV, i, muxIndex);
-    }
-
-    if (muxIndex == 1)
-    {
-        muxIndex = 0;
-    }
-    else
-    {
-        muxIndex = 1;
+        if (bms_checkRxFault(rxData, rxPec, rxCc))
+        {
+            return;
+        }
+        bms_parseAuxVoltage(rxData, ic_ad68[0].v_tempSens, i, muxIndex);
     }
 }
 
 
 void bms_openWireCheck(void)
 {
-    ADSV.CONT = 0;      // Continuous
+    ADSV.CONT = 1;      // Continuous
     ADSV.DCP  = 0;      // Discharge permitted
-    ADSV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
-
-    bms_transmitPoll((uint8_t *)&ADSV);
-    bms_readSVoltage();
-    bms_printVoltage(sVoltage);
-    bms_wakeupChain();
 
     bms_startTimer();
 
+    ADSV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
+    bms_transmitCmd((uint8_t *)&ADSV);
+//    bms_transmitPoll(PLSADC);
+    bms_delayMsActive(16);
+    bms_readSVoltage();
+    bms_printVoltage(ic_ad68[0].v_sCell);
+
+    // S and C is compared
+
+    ADSV.CONT = 0;      // Continuous
+    ADSV.DCP  = 0;      // Discharge permitted
+
+    bms_wakeupChain();
     ADSV.OW   = 0b10;   // Open wire on C-ADCS and S-ADCs
     bms_transmitPoll((uint8_t *)&ADSV);
+//    bms_transmitPoll(PLSADC);
+    bms_readSVoltage();
+    bms_printVoltage(ic_ad68[0].v_sCell);
+
+    bms_wakeupChain();
+    ADSV.OW   = 0b01;   // Open wire on C-ADCS and S-ADCs
+    bms_transmitPoll((uint8_t *)&ADSV);
+//    bms_transmitPoll(PLSADC);
+    bms_readSVoltage();
+    bms_printVoltage(ic_ad68[0].v_sCell);
 
     uint32_t time = bms_getTimCount();
     bms_stopTimer();
 
     printf("PT: %ld us\n", time);
-
-
-    bms_delayMsActive(50);
-
-    bms_readSVoltage();
-    bms_printVoltage(sVoltage);
 }
 
 
@@ -445,11 +510,11 @@ float convertCellTemp(float cellVoltage)
 
 void bms_parseTemps(void)
 {
-    for (int ic = 0; ic < TOTAL_IC-1; ic++)
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-            cellTemp[ic][c] = convertCellTemp(tempSensV[ic][c]);
+            ic_ad68[ic].temp_cell[c] = convertCellTemp(ic_ad68[ic].v_tempSens[c]);
         }
     }
 }
@@ -464,6 +529,7 @@ void bms_getAuxMeasurement(void)
 
 //    bms_startTimer();
 
+    bms_wakeupChain();
     bms68_setGpo45(0b10);
     bms_delayMsActive(5);
 
@@ -471,34 +537,51 @@ void bms_getAuxMeasurement(void)
     bms_transmitPoll(PLAUX1);
 
     bms_getAuxVoltage(0);
-//    bms_printVoltage(tempSensV);
-//    bms_wakeupChain();
-
-    bms68_setGpo45(0b01);
+    bms68_setGpo45(0b11);
     bms_delayMsActive(5);
-
 
     bms_transmitCmd((uint8_t *)&ADAX);
     bms_transmitPoll(PLAUX1);
 
     bms_getAuxVoltage(1);
-//    bms_printVoltage(tempSensV);
-//    bms_wakeupChain();
-
-    bms68_setGpo45(0b11);
-    bms_delayMsActive(5);
+    bms68_setGpo45(0b00);
 
     bms_parseTemps();
-    bms_printTemps(cellTemp);
+    bms_printVoltage(ic_ad68[0].v_tempSens);
+    bms_printTemps(ic_ad68[0].temp_cell);
 
-    printf("dieTemp: %f\n", dieTemp[0]);
-    printf("SegVoltage: %f\n", segmentVoltage[0]);
+    printf("dieTemp: %f\n", ic_ad68[0].temp_ic);
+    printf("SegVoltage: %f\n", ic_ad68[0].v_segment);
 
 //    uint32_t time = bms_getTimCount();
 //    bms_stopTimer();
 //    printf("PT: %ld us\n", time);
 }
 
+void bms_startDischarge(void)
+{
+    memset(&ic_ad68[0].pwma, 0, sizeof(ad68_pwma_t));
+    memset(&ic_ad68[0].pwmb, 0, sizeof(ad68_pwmb_t));
 
+    ic_ad68[0].pwma.pwm1 = 0b0111;  // 4 bit pwm at 937 ms
+
+    // The PWM discharge functionality is possible in the standby, REF-UP, extended balancing and in the measure states
+    // AND while the discharge timeout has not expired (DCTO ≠ 0)
+
+    ic_ad68[0].cfb_Tx.dcto = 1;     // DC Timer in minutes (DTRNG = 0)
+    ic_ad68[0].cfb_Tx.dtmen = 1;    // Enables cell v measurement in Extended Balancing Mode
+//    ic_ad68[0].cfb_Tx.dcc = 0b1; // --- High priority discharge (bypasses PWM)
+
+    bms_writeConfigB();
+    bms_writePwmA();
+}
+
+
+void bms_stopDischarge(void)
+{
+    bms_wakeupChain();
+    bms_transmitCmd(SRST);      // Put all devices to sleep
+    printf("--- SOFT RESET --- \n");
+}
 
 

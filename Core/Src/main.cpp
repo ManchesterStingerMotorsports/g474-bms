@@ -24,14 +24,6 @@
 #include "string.h"
 #include "stdio.h"
 
-//#include "adbms_libWrapper.h"
-//#include "adbms_config.h"
-//
-//#include "adbms_mcuWrapper.h"
-//#include "adbms_cmdlist.h"
-//#include "adbms_utility.h"
-//
-//#include "adbms2950_data.h"
 
 #include "bms_cmdlist.h"
 #include "bms_datatypes.h"
@@ -51,7 +43,8 @@ enum
     BALANCING,
     CHARGING,
     INACTIVE,
-} bmsState;
+    IDLE,
+} bmsState, prevBmsState;
 
 
 /* USER CODE END PTD */
@@ -164,27 +157,63 @@ int main(void)
     bms_wakeupChain();
     bms_readSid();
 
-    bmsState = INACTIVE;
+    bmsState = IDLE;
+    prevBmsState = IDLE;
 
     while (1)
     {
+        if (prevBmsState != bmsState)
+        {
+            if (bmsState == ACTIVE)
+            {
+                printf("Start Discharge: \n");
+                bms_wakeupChain();
+                bms_startDischarge();
+
+                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+                bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+                bms_delayMsActive(12);
+            }
+            prevBmsState = bmsState;
+        }
+
+
         switch(bmsState)
         {
-
         case ACTIVE:
 
             timeStart = getRuntimeMs();
 
-            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
 
+//            printf("C Voltage: \n");
+//            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
 //            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
 //            bms_delayMsActive(12);
 //            bms_readAvgCellVoltage();
 
+
+//            printf("OpenWire Check: \n");
+//            bms_wakeupChain();
 //            bms_delayMsActive(50);
 //            bms_openWireCheck();
 
+            printf("C Voltage (Do stuff): \n");
+            for(int i = 0; i < 5; i++)
+            {
+                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+                bms_readAvgCellVoltage();
+                bms_delayMsActive(10);
+            }
+
+            printf("Temp Meausurements: \n");
+            bms_wakeupChain();
             bms_getAuxMeasurement();
+
+
+            HAL_Delay(1000);
+            bms_wakeupChain();
+            bms_readSid();
+
 
 
             timeDiff = getRuntimeMsDiff(timeStart);
@@ -194,16 +223,23 @@ int main(void)
 
 //            // Toggle GPIO
 //            bms_readConfigA();
-//            bms68_toggleGpo4();
+//            bms_wakeupChain();
+//            bms68_setGpo45(0b00);
+//            bms_wakeupChain();
+//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+//            bms_wakeupChain();
 //            bms_readConfigA();
 
-
-
-
-            bmsState = INACTIVE;
+//            bmsState = INACTIVE;
+            break;
 
         case INACTIVE:
+
+            bms_stopDischarge();
+            bmsState = IDLE;
+            HAL_Delay(500);
             break;
+
         default:
             break;
         }
@@ -553,8 +589,15 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if(GPIO_Pin == B1_Pin) // If The INT Source Is EXTI Line9 (A9 Pin)
     {
-        // Do something
-        bmsState = ACTIVE;
+        // Do something when button pressed
+        if (bmsState == ACTIVE)
+        {
+            bmsState = INACTIVE;
+        }
+        else
+        {
+            bmsState = ACTIVE;
+        }
     }
 }
 
