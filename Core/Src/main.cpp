@@ -24,14 +24,6 @@
 #include "string.h"
 #include "stdio.h"
 
-//#include "adbms_libWrapper.h"
-//#include "adbms_config.h"
-//
-//#include "adbms_mcuWrapper.h"
-//#include "adbms_cmdlist.h"
-//#include "adbms_utility.h"
-//
-//#include "adbms2950_data.h"
 
 #include "bms_cmdlist.h"
 #include "bms_datatypes.h"
@@ -177,7 +169,10 @@ int main(void)
                 printf("Start Discharge: \n");
                 bms_wakeupChain();
                 bms_startDischarge();
-                bms_delayMsActive(50);
+
+                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+                bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+                bms_delayMsActive(12);
             }
             prevBmsState = bmsState;
         }
@@ -195,11 +190,6 @@ int main(void)
 //            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
 //            bms_delayMsActive(12);
 //            bms_readAvgCellVoltage();
-//
-//            printf("Start Discharge: \n");
-//            bms_wakeupChain();
-//            bms_startDischarge();
-//            bms_delayMsActive(50);
 
 
 //            printf("OpenWire Check: \n");
@@ -207,24 +197,23 @@ int main(void)
 //            bms_delayMsActive(50);
 //            bms_openWireCheck();
 
-//            printf("C Voltage (Do stuff): \n");
-//            for(int i = 0; i < 5; i++)
-//            {
-//                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-//                bms_readAvgCellVoltage();
-//                bms_delayMsActive(10);
-//            }
+            printf("C Voltage (Do stuff): \n");
+            for(int i = 0; i < 5; i++)
+            {
+                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+                bms_readAvgCellVoltage();
+                bms_delayMsActive(10);
+            }
 
-            HAL_Delay(100);
+            printf("Temp Meausurements: \n");
+            bms_wakeupChain();
+            bms_getAuxMeasurement();
+
+
+            HAL_Delay(1000);
             bms_wakeupChain();
             bms_readSid();
 
-
-
-
-
-//            bms_wakeupChain();
-//            bms_getAuxMeasurement();
 
 
             timeDiff = getRuntimeMsDiff(timeStart);

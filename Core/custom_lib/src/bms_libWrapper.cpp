@@ -563,11 +563,16 @@ void bms_startDischarge(void)
     memset(&ic_ad68[0].pwma, 0, sizeof(ad68_pwma_t));
     memset(&ic_ad68[0].pwmb, 0, sizeof(ad68_pwmb_t));
 
-    ic_ad68[0].pwma.pwm1 = 0b0111;
+    ic_ad68[0].pwma.pwm1 = 0b0111;  // 4 bit pwm at 937 ms
 
-//    ic_ad68[0].cfb_Tx.dcc = 0b1; --- High priority discharge
+    // The PWM discharge functionality is possible in the standby, REF-UP, extended balancing and in the measure states
+    // AND while the discharge timeout has not expired (DCTO ≠ 0)
 
-//    bms_writeConfigB();
+    ic_ad68[0].cfb_Tx.dcto = 1;     // DC Timer in minutes (DTRNG = 0)
+    ic_ad68[0].cfb_Tx.dtmen = 1;    // Enables cell v measurement in Extended Balancing Mode
+//    ic_ad68[0].cfb_Tx.dcc = 0b1; // --- High priority discharge (bypasses PWM)
+
+    bms_writeConfigB();
     bms_writePwmA();
 }
 
