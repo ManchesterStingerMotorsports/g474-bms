@@ -166,13 +166,30 @@ int main(void)
         {
             if (bmsState == ACTIVE)
             {
-                printf("Start Discharge: \n");
-                bms_wakeupChain();
-                bms_startDischarge();
+                const float delta_threshold = 0.010; // In volts
+                float discharge_threshold;
 
+                // Measure the current cell voltage first
+                printf("Measuring Cell Voltage: \n");
                 bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
                 bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
                 bms_delayMsActive(12);
+                bms_readAvgCellVoltage();
+
+                // Calculate the discharge threshold
+                discharge_threshold = bms_calculateBalancing(delta_threshold);
+
+                // Check if need to balance the cells
+                if (discharge_threshold > 0)
+                {
+                    printf("Start Discharge: \n");
+                    bms_wakeupChain();
+                    bms_startDischarge(discharge_threshold);
+
+                    bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+                    bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+                    bms_delayMsActive(12);
+                }
             }
             prevBmsState = bmsState;
         }

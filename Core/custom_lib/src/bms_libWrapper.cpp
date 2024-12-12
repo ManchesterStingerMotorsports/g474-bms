@@ -44,6 +44,8 @@ typedef struct
     float v_avgCell[16];
     float v_avgCell_sum;
     float v_avgCell_avg;
+    float v_avgCell_min;
+    float v_avgCell_max;
     float v_avgCell_delta;
 
     float v_sCell[16];
@@ -328,9 +330,12 @@ void bms_calculateStats(void)
                 min = voltage;
             }
         }
+        ic_ad68[ic].v_avgCell_min   = min;
+        ic_ad68[ic].v_avgCell_max   = max;
         ic_ad68[ic].v_avgCell_sum   = sum;
         ic_ad68[ic].v_avgCell_avg   = sum / 16.0;
         ic_ad68[ic].v_avgCell_delta = max - min;
+
     }
 }
 
@@ -562,6 +567,7 @@ void bms_getAuxMeasurement(void)
 void bms_setPwm(ic_ad68_t *ic, uint8_t cell)
 {
     const uint8_t dutyCycle = 0b0111;
+    cell++;                                 // Change from 0 indexing to 1 indexing
 
     switch (cell) {
         case 1:
@@ -619,14 +625,42 @@ void bms_setPwm(ic_ad68_t *ic, uint8_t cell)
 }
 
 
-void bms_startDischarge(void)
+float bms_calculateBalancing(float delta_threshold)
+{
+    float min = 999.0;
+    float max = -999.0;
+
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        if (ic_ad68[ic].v_avgCell_min < min)
+        {
+            min = ic_ad68[ic].v_avgCell_min;
+        }
+        if (ic_ad68[ic].v_avgCell_max > max)
+        {
+            max = ic_ad68[ic].v_avgCell_max;
+        }
+    }
+
+    if (max - min > delta_threshold)
+    {
+        return min + delta_threshold;
+    }
+    else
+    {
+        return -999;  // No balancing needed
+    }
+}
+
+
+void bms_startDischarge(float threshold)
 {
     memset(&ic_ad68[0].pwma, 0, sizeof(ad68_pwma_t));
     memset(&ic_ad68[0].pwmb, 0, sizeof(ad68_pwmb_t));
 
     ic_ad68[0].pwma.pwm1 = 0b0111;  // 4 bit pwm at 937 ms
 
-    float threshold = 4.0;          // Volts
+//    threshold = 4.0;          // Volts
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
