@@ -558,12 +558,86 @@ void bms_getAuxMeasurement(void)
 //    printf("PT: %ld us\n", time);
 }
 
+
+void bms_setPwm(ic_ad68_t *ic, uint8_t cell)
+{
+    const uint8_t dutyCycle = 0b0111;
+
+    switch (cell) {
+        case 1:
+            ic->pwma.pwm1 = dutyCycle;
+            break;
+        case 2:
+            ic->pwma.pwm2 = dutyCycle;
+            break;
+        case 3:
+            ic->pwma.pwm3 = dutyCycle;
+            break;
+        case 4:
+            ic->pwma.pwm4 = dutyCycle;
+            break;
+        case 5:
+            ic->pwma.pwm5 = dutyCycle;
+            break;
+        case 6:
+            ic->pwma.pwm6 = dutyCycle;
+            break;
+        case 7:
+            ic->pwma.pwm7 = dutyCycle;
+            break;
+        case 8:
+            ic->pwma.pwm8 = dutyCycle;
+            break;
+        case 9:
+            ic->pwma.pwm9 = dutyCycle;
+            break;
+        case 10:
+            ic->pwma.pwm10 = dutyCycle;
+            break;
+        case 11:
+            ic->pwma.pwm11 = dutyCycle;
+            break;
+        case 12:
+            ic->pwma.pwm12 = dutyCycle;
+            break;
+        case 13:
+            ic->pwmb.pwm13 = dutyCycle;
+            break;
+        case 14:
+            ic->pwmb.pwm14 = dutyCycle;
+            break;
+        case 15:
+            ic->pwmb.pwm15 = dutyCycle;
+            break;
+        case 16:
+            ic->pwmb.pwm16 = dutyCycle;
+            break;
+        default:
+            // Handle invalid cases
+            break;
+    }
+}
+
+
 void bms_startDischarge(void)
 {
     memset(&ic_ad68[0].pwma, 0, sizeof(ad68_pwma_t));
     memset(&ic_ad68[0].pwmb, 0, sizeof(ad68_pwmb_t));
 
     ic_ad68[0].pwma.pwm1 = 0b0111;  // 4 bit pwm at 937 ms
+
+    float threshold = 4.0;          // Volts
+
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        for (int c = 0; c < TOTAL_CELL; c++)
+        {
+            if (ic_ad68[ic].v_avgCell[c] > threshold)
+            {
+                bms_setPwm(&ic_ad68[ic], c);
+            }
+        }
+    }
 
     // The PWM discharge functionality is possible in the standby, REF-UP, extended balancing and in the measure states
     // AND while the discharge timeout has not expired (DCTO ≠ 0)
@@ -572,8 +646,9 @@ void bms_startDischarge(void)
     ic_ad68[0].cfb_Tx.dtmen = 1;    // Enables cell v measurement in Extended Balancing Mode
 //    ic_ad68[0].cfb_Tx.dcc = 0b1; // --- High priority discharge (bypasses PWM)
 
-    bms_writeConfigB();
-    bms_writePwmA();
+    bms_writeConfigB();             // Send the DCTO Timer config
+    bms_writePwmA();                // Send the PWM configs
+    bms_writePwmB();                // Send the PWM configs
 }
 
 
