@@ -8,6 +8,7 @@
 #pragma once
 
 #include "main.h"
+#include <stdbool.h>
 
 #define DATA_LEN       (6)       // Data
 #define DATAPKT_LEN    (6 + 2)   // Data + DPEC

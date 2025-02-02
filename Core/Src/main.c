@@ -166,7 +166,7 @@ int main(void)
         {
             if (bmsState == ACTIVE)
             {
-                const float delta_threshold = 0.010; // In volts
+                const float delta_threshold = 0.005; // In volts
                 float discharge_threshold;
 
                 // Measure the current cell voltage first
@@ -559,23 +559,21 @@ static void MX_GPIO_Init(void)
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
 #define GETCHAR_PROTOTYPE int __io_getchar(void)
 
-extern "C"
+PUTCHAR_PROTOTYPE
 {
-    PUTCHAR_PROTOTYPE
-    {
-        HAL_UART_Transmit(&hlpuart1, (uint8_t *)(&ch), 1, HAL_MAX_DELAY);
-        setbuf(stdout, NULL);
-        return ch;
-    }
-
-    GETCHAR_PROTOTYPE
-    {
-        uint8_t ch;
-        __HAL_UART_CLEAR_OREFLAG(&hlpuart1);
-        HAL_UART_Receive(&hlpuart1, (uint8_t *)(&ch), 1, HAL_MAX_DELAY);
-        return (int)ch;
-    }
+    HAL_UART_Transmit(&hlpuart1, (uint8_t *)(&ch), 1, HAL_MAX_DELAY);
+    setbuf(stdout, NULL);
+    return ch;
 }
+
+GETCHAR_PROTOTYPE
+{
+    uint8_t ch;
+    __HAL_UART_CLEAR_OREFLAG(&hlpuart1);
+    HAL_UART_Receive(&hlpuart1, (uint8_t *)(&ch), 1, HAL_MAX_DELAY);
+    return (int)ch;
+}
+
 
 
 /// Timer interrupt callback

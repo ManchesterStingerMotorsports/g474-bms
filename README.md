@@ -10,9 +10,9 @@ Otherwise known by Formula Student as Accumulator Management System (AMS)
 ![alt text](<doc/ADI ICs.png>)
 ![alt text](<doc/Diagnostic Recommendation.png>)
 
-Our terminology:
+Terminology:
 
-- BMS or AMS -> **STM32G474RET6** (Microcontroller)
+- BMS (or AMS) -> **STM32G474RET6** (Microcontroller)
 - BMS Transciever -> **ADBMS6822** (Usually attached on top of the microcontroller)
 - BMS Master -> **ADBMS2950** (First device in daisy chain)
 - BMS Slave -> **ADBMS6830** (7x of this in the daisy chain)
@@ -24,19 +24,31 @@ Our terminology:
 - Due to CubeMX unable to generate main.cpp, to generate code, you have to first rename to main.c, generate code, and then rename it back to main.cpp 
 
 
-## Testing and Progress
+## Operation Modes
 
-Currently only tested for 6830 cell voltage Measurement
+Idle
+- Cell Balancing: ON
+- Sensor Update Rate: Low
 
+
+Active
+- Cell Balancing: OFF
+- Sensor Update Rate: High
+
+
+Charging
+- Cell Balancing: ON
+- Sensor Update Rate: Medium
+- Charger CAN Communication
 
 
 ## TO-DOs
 
-- [x] task1
-- [ ] task2
-- [ ] task3
-- [ ] task4
-
+- [ ] Charging
+- [ ] BMS Master Measurements
+- [ ] Error Flag (Status Register Flags)
+- [ ] Error Handling
+- [ ] Operation Modes Implementation
 
 ## Pinouts and Peripherals
 
