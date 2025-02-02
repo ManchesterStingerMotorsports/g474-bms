@@ -14,6 +14,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "main.h"
+#include "uartDMA.h"
 
 
 uint8_t  txData[TOTAL_IC][DATA_LEN];
@@ -178,14 +179,14 @@ void bms_printRawData(uint8_t data[TOTAL_IC][DATA_LEN], uint8_t cc[TOTAL_IC])
 {
     for (int ic = 0; ic < TOTAL_IC; ic++)
     {
-        printf("IC%d: ", ic+1);
+        printfDma("IC%d: ", ic+1);
         for (int j = 0; j < 6; j++)             // For every byte recieved (6 bytes)
         {
-            printf("0x%02X, ", data[ic][j]);    // Print each of the bytes
+            printfDma("0x%02X, ", data[ic][j]);    // Print each of the bytes
         }
-        printf("CC: %d |   ", cc[ic]);
+        printfDma("CC: %d |   ", cc[ic]);
     }
-    printf("\n\n");
+    printfDma("\n\n");
 }
 
 
@@ -196,15 +197,15 @@ bool bms_checkRxFault(uint8_t data[TOTAL_IC][DATA_LEN], uint16_t pec[TOTAL_IC], 
 
     if (!bms_checkRxPec(data, pec, cc, errorIndex))
     {
-        printf("WARNING! PEC ERROR - IC:");
+        printfDma("WARNING! PEC ERROR - IC:");
         for(int ic = 0; ic < TOTAL_IC; ic++)
         {
             if (!errorIndex[ic])
             {
-                printf(" %d,", ic+1);
+                printfDma(" %d,", ic+1);
             }
         }
-        printf("\n");
+        printfDma("\n");
         faultDetected = true;
     }
 
@@ -219,7 +220,7 @@ bool bms_checkRxFault(uint8_t data[TOTAL_IC][DATA_LEN], uint16_t pec[TOTAL_IC], 
 void bms_readSid(void)
 {
     bms_receiveData(RDSID, rxData, rxPec, rxCc);
-    printf("SID: \n");
+    printfDma("SID: \n");
     bms_checkRxFault(rxData, rxPec, rxCc);
     bms_printRawData(rxData, rxCc);
 }
@@ -228,7 +229,7 @@ void bms_readSid(void)
 void bms_readConfigA(void)
 {
     bms_receiveData(RDCFGA, rxData, rxPec, rxCc);
-    printf("CFGA: \n");
+    printfDma("CFGA: \n");
     bms_checkRxFault(rxData, rxPec, rxCc);
     bms_printRawData(rxData, rxCc);
 }
@@ -237,7 +238,7 @@ void bms_readConfigA(void)
 void bms_readConfigB(void)
 {
     bms_receiveData(RDCFGB, rxData, rxPec, rxCc);
-    printf("CFGB: \n");
+    printfDma("CFGB: \n");
     bms_checkRxFault(rxData, rxPec, rxCc);
     bms_printRawData(rxData, rxCc);
 }
@@ -342,47 +343,47 @@ void bms_calculateStats(void)
 
 void bms_printVoltage(float vArr[16])
 {
-    printf("| IC |");
+    printfDma("| IC |");
     for (int i = 0; i < TOTAL_CELL; i++)
     {
-        printf("   %2d   |", i+1);
+        printfDma("   %2d   |", i+1);
     }
-    printf("  Sum   |  Delta |\n");
+    printfDma("  Sum   |  Delta |\n");
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
-        printf("| %2d |", ic);
+        printfDma("| %2d |", ic);
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-            printf("%8.5f|", *((float*)((uint8_t*)vArr + ic * sizeof(ic_ad68_t)) + c));
+            printfDma("%8.5f|", *((float*)((uint8_t*)vArr + ic * sizeof(ic_ad68_t)) + c));
         }
 
-        printf("%8.5f|", ic_ad68[ic].v_avgCell_sum);
-        printf("%8.5f|", ic_ad68[ic].v_avgCell_delta);
-        printf("\n");
+        printfDma("%8.5f|", ic_ad68[ic].v_avgCell_sum);
+        printfDma("%8.5f|", ic_ad68[ic].v_avgCell_delta);
+        printfDma("\n");
     }
 }
 
 
 void bms_printTemps(float tArr[16])
 {
-    printf("| IC |");
+    printfDma("| IC |");
     for (int i = 0; i < TOTAL_CELL; i++)
     {
-        printf("  %2d   |", i+1);
+        printfDma("  %2d   |", i+1);
     }
-    printf("\n");
+    printfDma("\n");
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
-        printf("| %2d |", ic);
+        printfDma("| %2d |", ic);
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-//            printf("%6.1f |", tArr[ic][c]);
-            printf("%6.1f |", *((float*)((uint8_t*)tArr + ic * sizeof(ic_ad68_t)) + c));
+//            printfDma("%6.1f |", tArr[ic][c]);
+            printfDma("%6.1f |", *((float*)((uint8_t*)tArr + ic * sizeof(ic_ad68_t)) + c));
 
         }
-        printf("\n");
+        printfDma("\n");
     }
 }
 
@@ -480,7 +481,7 @@ void bms_openWireCheck(void)
     uint32_t time = bms_getTimCount();
     bms_stopTimer();
 
-    printf("PT: %ld us\n", time);
+    printfDma("PT: %ld us\n", time);
 }
 
 
@@ -555,12 +556,12 @@ void bms_getAuxMeasurement(void)
     bms_printVoltage(ic_ad68[0].v_tempSens);
     bms_printTemps(ic_ad68[0].temp_cell);
 
-    printf("dieTemp: %f\n", ic_ad68[0].temp_ic);
-    printf("SegVoltage: %f\n", ic_ad68[0].v_segment);
+    printfDma("dieTemp: %f\n", ic_ad68[0].temp_ic);
+    printfDma("SegVoltage: %f\n", ic_ad68[0].v_segment);
 
 //    uint32_t time = bms_getTimCount();
 //    bms_stopTimer();
-//    printf("PT: %ld us\n", time);
+//    printfDma("PT: %ld us\n", time);
 }
 
 
@@ -690,7 +691,7 @@ void bms_stopDischarge(void)
 {
     bms_wakeupChain();
     bms_transmitCmd(SRST);      // Put all devices to sleep
-    printf("--- SOFT RESET --- \n");
+    printfDma("--- SOFT RESET --- \n");
 }
 
 

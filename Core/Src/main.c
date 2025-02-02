@@ -24,12 +24,13 @@
 #include "string.h"
 #include "stdio.h"
 
-
 #include "bms_cmdlist.h"
 #include "bms_datatypes.h"
 #include "bms_utility.h"
 #include "bms_mcuWrapper.h"
 #include "bms_libWrapper.h"
+
+#include "uartDMA.h"
 
 
 /* USER CODE END Includes */
@@ -61,6 +62,7 @@ enum
 
 /* Private variables ---------------------------------------------------------*/
 UART_HandleTypeDef hlpuart1;
+DMA_HandleTypeDef hdma_lpuart1_tx;
 
 SPI_HandleTypeDef hspi1;
 
@@ -74,6 +76,7 @@ TIM_HandleTypeDef htim16;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_LPUART1_UART_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM2_Init(void);
@@ -102,8 +105,6 @@ int main(void)
 
   /* USER CODE BEGIN 1 */
 
-  setvbuf(stdin, NULL, _IONBF, 0); //disable buffering for input stream
-
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -124,6 +125,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_LPUART1_UART_Init();
   MX_SPI1_Init();
   MX_TIM2_Init();
@@ -147,12 +149,10 @@ int main(void)
     // Initialise BMS configs (No commands sent)
     bms_init();
 
-    char message[50];
-
     uint32_t timeDiff = 0;
     uint32_t timeStart;
 
-    printf("Start Program \n\n");
+    printfDma("Start Program \n\n");
 
     bms_wakeupChain();
     bms_readSid();
@@ -170,7 +170,7 @@ int main(void)
                 float discharge_threshold;
 
                 // Measure the current cell voltage first
-                printf("Measuring Cell Voltage: \n");
+                printfDma("Measuring Cell Voltage: \n");
                 bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
                 bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
                 bms_delayMsActive(12);
@@ -182,7 +182,7 @@ int main(void)
                 // Check if need to balance the cells
                 if (discharge_threshold > 0)
                 {
-                    printf("Start Discharge: \n");
+                    printfDma("Start Discharge: \n");
                     bms_wakeupChain();
                     bms_startDischarge(discharge_threshold);
 
@@ -201,41 +201,36 @@ int main(void)
 
             timeStart = getRuntimeMs();
 
-
-//            printf("C Voltage: \n");
+//            printfDma("C Voltage: \n");
 //            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
 //            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
 //            bms_delayMsActive(12);
 //            bms_readAvgCellVoltage();
 
-
-//            printf("OpenWire Check: \n");
+//            printfDma("OpenWire Check: \n");
 //            bms_wakeupChain();
 //            bms_delayMsActive(50);
 //            bms_openWireCheck();
 
-            printf("C Voltage (Do stuff): \n");
-            for(int i = 0; i < 5; i++)
+            printfDma("C Voltage (Do stuff): \n");
+            for(int i = 0; i < 4; i++)
             {
                 bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
                 bms_readAvgCellVoltage();
                 bms_delayMsActive(10);
             }
 
-            printf("Temp Meausurements: \n");
+            printfDma("Temp Meausurements: \n");
             bms_wakeupChain();
             bms_getAuxMeasurement();
 
 
-            HAL_Delay(1000);
+            HAL_Delay(500);
             bms_wakeupChain();
             bms_readSid();
 
-
-
             timeDiff = getRuntimeMsDiff(timeStart);
-            sprintf(message, "Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
-            HAL_UART_Transmit(&hlpuart1, (uint8_t*)message, strlen(message), HAL_MAX_DELAY);
+            printfDma("Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
 
 
 //            // Toggle GPIO
@@ -480,6 +475,26 @@ static void MX_TIM16_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMAMUX1_CLK_ENABLE();
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+  /* DMAMUX_OVR_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMAMUX_OVR_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMAMUX_OVR_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -553,26 +568,6 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
-/// printf and scanf compatibility code ///
-
-#define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
-#define GETCHAR_PROTOTYPE int __io_getchar(void)
-
-PUTCHAR_PROTOTYPE
-{
-    HAL_UART_Transmit(&hlpuart1, (uint8_t *)(&ch), 1, HAL_MAX_DELAY);
-    setbuf(stdout, NULL);
-    return ch;
-}
-
-GETCHAR_PROTOTYPE
-{
-    uint8_t ch;
-    __HAL_UART_CLEAR_OREFLAG(&hlpuart1);
-    HAL_UART_Receive(&hlpuart1, (uint8_t *)(&ch), 1, HAL_MAX_DELAY);
-    return (int)ch;
-}
 
 
 
