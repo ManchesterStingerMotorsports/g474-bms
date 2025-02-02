@@ -20,8 +20,58 @@ Terminology:
 
 ## Software Design Notes
 
-- C++ for "namespace" feature to avoid variable name conflict
-- Due to CubeMX unable to generate main.cpp, to generate code, you have to first rename to main.c, generate code, and then rename it back to main.cpp 
+*Making notes here because I have already forgot some of it just after a month.*
+
+Please read this before going through the code, and **READ THE DATASHEET** for more info
+
+**GENERAL**
+- UART Baud Rate = 500 kbit/s
+
+**IsoSPI**
+- Timeout
+    - IsoSPI timeout Duration: 4.3 ms
+    - If IsoSPI sleeps, need to wake up isoSPI by sending CS pulse for every device in chain before sending commands
+- Interfacing
+    - isoSPI can be interfaced using ADBMS6822 with SPI
+    - ADBMS6822 will behave like a typical SPI shift register
+- Commands
+    - There is no way to send a command to a specific device in a daisy chain
+        - So the master and slave will get the same commands
+    - Readall are not possible with all devices in the chain.
+        - The first device (master) might be able to, but no plans of adding them for now
+
+**ADBMS2950**
+- WIP
+
+**ADBMS6830**
+- Core States
+    - Sleep
+        - State after reset or 1.8s of inactivity
+        - Should not be in this state in any case other than reset
+        - Will reset all config registers (safe state)
+    - Standby
+        - Default standby state
+    - Refup
+        - Basically same as Standby if REFON = 1
+    - Extended Balancing
+        - Basically same as Standby if DCTO = 1
+        - Default state if discharging is ON
+    - Measure
+        - State where ADC conversion is happening
+        - Measurements are usually continous so it will mostly be in this state
+    - LPCM Modes
+        - Primarily for very low power application
+        - extra complicated, so not used for now.
+    - DTM
+        - Used for low power standby + Balancing
+        - No plans of using it currently
+- Balancing
+    - DTM state will not be used for simplicity and safety
+    - Instead, a command will be sent every second manually. The commands:
+        - measure the voltages
+        - measure temperature
+        - set which cells to discharge
+        - reset DCTO
 
 
 ## Operation Modes
@@ -30,11 +80,9 @@ Idle
 - Cell Balancing: ON
 - Sensor Update Rate: Low
 
-
 Active
 - Cell Balancing: OFF
 - Sensor Update Rate: High
-
 
 Charging
 - Cell Balancing: ON
