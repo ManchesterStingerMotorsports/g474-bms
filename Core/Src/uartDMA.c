@@ -12,7 +12,7 @@
 #include "main.h"
 
 #define uartHandle hlpuart1
-#define BUFFER_SIZE 725
+#define BUFFER_SIZE 2048
 
 
 char buffer[BUFFER_SIZE] = {0};

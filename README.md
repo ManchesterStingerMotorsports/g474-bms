@@ -25,7 +25,7 @@ Terminology:
 Please read this before going through the code, and **READ THE DATASHEET** for more info
 
 **GENERAL**
-- UART Baud Rate = 500 kbit/s
+- UART Baud Rate = 1000 kbit/s
 
 **IsoSPI**
 - Timeout
@@ -41,7 +41,17 @@ Please read this before going through the code, and **READ THE DATASHEET** for m
         - The first device (master) might be able to, but no plans of adding them for now
 
 **ADBMS2950**
-- WIP
+- Core States
+    - Standby
+        - Unlike 6830 this state is a temporary state and will automatically transition to Refup
+        - ADC won't trigger in this state
+        - REFUP bit can only be read (6830 can be written)
+    - Refup
+        - OCxADC are set into operation (if OCEN = 1)
+    - Measure
+        - Enters Measure state after recieving atleast one 
+        ADI, ADI2, ADV or ADX command from within REFUP State 
+        - Remains in the MEASURE state until power is removed or the SRST command is sent.
 
 **ADBMS6830**
 - Core States

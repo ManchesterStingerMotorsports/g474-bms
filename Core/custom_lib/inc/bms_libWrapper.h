@@ -40,4 +40,6 @@ float bms_calculateBalancing(float delta_threshold);
 void bms_startDischarge(float threshold);
 void bms_stopDischarge(void);
 
+void bms29_setGpo(void);
+void bms_readVB(void);
 

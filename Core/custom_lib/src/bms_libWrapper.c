@@ -5,6 +5,40 @@
  *      Author: amrlxyz
  */
 
+/*
+ * Compatible commands
+ * ADBMS2950 == ADBMS6830
+ *
+ * RDCFGA
+ * RDCFGB
+ * ADI1     = ADCV
+ * ADI2     = ADSV
+ * RDI      = RDFCA or RDCVA
+ * RDVB     = RDFCB or RDCVB
+ * RDIVB1   = RDFCC or RDCVC
+ * RDIACC   = RDACA
+ * RDVBACC  = RDACB
+ * RDIVB1ACC= RDACC
+ *
+ */
+
+/*
+ * Commands Notes
+ *
+ * -- 6830 --
+ * ADCV : Start ADC
+ * ADSV : Start redundancy ADC
+ * RDCVA: Read Cell Voltage A
+ * RDFCA: Read Filtered Cell A
+ * RDACA: Read Averaged Cell A
+ *
+ * -- 2950 --
+ * ADIx: Start IxADC and VBxADC
+ * RDI : Read Read I1ADC and I2ADC results
+ *
+ */
+
+
 #include "bms_libWrapper.h"
 #include "bms_datatypes.h"
 #include "bms_utility.h"
@@ -246,11 +280,20 @@ void bms_readConfigB(void)
 
 void bms_startAdcvCont(void)
 {
+    // 6830
+    // For DCP = 0
+    // If RD = 0 and CONT = 1, PWM discharge is permitted
+    // If RD = 1 and CONT = 0, PWM discharge interrupted temporarily until RD conversion finished (8ms typ)
+    // If RD = 1 and CONT = 1, PWM discharge stopped
+
     ADCV.CONT = 1;      // Continuous
-    ADCV.RD   = 0;      // Redundant Measurement
+    ADCV.RD   = 1;      // Redundant Measurement
     ADCV.DCP  = 0;      // Discharge permitted
     ADCV.RSTF = 0;      // Reset filter
     ADCV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
+
+    // Behaviour of 2950 (ADI1 Command)
+    //
 
     bms_transmitCmd((uint8_t *)&ADCV);
 }
@@ -659,9 +702,7 @@ void bms_startDischarge(float threshold)
     memset(&ic_ad68[0].pwma, 0, sizeof(ad68_pwma_t));
     memset(&ic_ad68[0].pwmb, 0, sizeof(ad68_pwmb_t));
 
-    ic_ad68[0].pwma.pwm1 = 0b0111;  // 4 bit pwm at 937 ms
-
-//    threshold = 4.0;          // Volts
+//    threshold = 1.5;          // Volts
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
@@ -674,11 +715,13 @@ void bms_startDischarge(float threshold)
         }
     }
 
+    ic_ad68[0].pwma.pwm1 = 0b0111;  // 4 bit pwm at 937 ms (for testing -> enables discharge for cell 1)
+
     // The PWM discharge functionality is possible in the standby, REF-UP, extended balancing and in the measure states
     // AND while the discharge timeout has not expired (DCTO ≠ 0)
 
     ic_ad68[0].cfb_Tx.dcto = 1;     // DC Timer in minutes (DTRNG = 0)
-    ic_ad68[0].cfb_Tx.dtmen = 1;    // Enables cell v measurement in Extended Balancing Mode
+    ic_ad68[0].cfb_Tx.dtmen = 0;    // Disables Discharge Timer Monitor (DTM)
 //    ic_ad68[0].cfb_Tx.dcc = 0b1; // --- High priority discharge (bypasses PWM)
 
     bms_writeConfigB();             // Send the DCTO Timer config
@@ -692,6 +735,28 @@ void bms_stopDischarge(void)
     bms_wakeupChain();
     bms_transmitCmd(SRST);      // Put all devices to sleep
     printfDma("--- SOFT RESET --- \n");
+}
+
+
+void bms29_setGpo(void)
+{
+    ic_ad29.cfa_Tx.gpo1c  = 1;      // State control
+    ic_ad29.cfa_Tx.gpo1od = 0;      // 1 = Open drain, 0 = push-pull
+    ic_ad29.cfa_Tx.gpo2c  = 1;      // State control
+    ic_ad29.cfa_Tx.gpo2od = 0;      // 1 = Open drain, 0 = push-pull
+
+    bms_writeConfigA();
+}
+
+
+void bms_readVB(void)
+{
+    bms_receiveData(RDVB, rxData, rxPec, rxCc);
+    bms_checkRxFault(rxData, rxPec, rxCc);
+    bms_printRawData(rxData, rxCc);
+    float vb1 = *((int16_t *)(rxData[0] + 2)) *  0.000100 * 396.604395604;
+    float vb2 = *((int16_t *)(rxData[0] + 4)) * -0.000085 * 751;
+    printfDma("VB: %fV, %fV  \n\n", vb1, vb2);
 }
 
 

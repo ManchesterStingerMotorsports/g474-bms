@@ -199,50 +199,54 @@ int main(void)
         {
         case ACTIVE:
 
-            timeStart = getRuntimeMs();
-
-//            printfDma("C Voltage: \n");
-//            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-//            bms_delayMsActive(12);
-//            bms_readAvgCellVoltage();
-
-//            printfDma("OpenWire Check: \n");
+//            timeStart = getRuntimeMs();
+//
+////            printfDma("C Voltage: \n");
+////            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+////            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+////            bms_delayMsActive(12);
+////            bms_readAvgCellVoltage();
+//
+////            printfDma("OpenWire Check: \n");
+////            bms_wakeupChain();
+////            bms_delayMsActive(50);
+////            bms_openWireCheck();
+//
+//            printfDma("C Voltage (Do stuff): \n");
+//            for(int i = 0; i < 4; i++)
+//            {
+//                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+//                bms_readAvgCellVoltage();
+//                bms_delayMsActive(10);
+//            }
+//
+//            printfDma("Temp Meausurements: \n");
 //            bms_wakeupChain();
-//            bms_delayMsActive(50);
-//            bms_openWireCheck();
+//            bms_getAuxMeasurement();
 
-            printfDma("C Voltage (Do stuff): \n");
-            for(int i = 0; i < 4; i++)
-            {
-                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-                bms_readAvgCellVoltage();
-                bms_delayMsActive(10);
-            }
+//            bms_wakeupChain();
+//            bms_readSid();
 
-            printfDma("Temp Meausurements: \n");
             bms_wakeupChain();
-            bms_getAuxMeasurement();
-
+            bms29_setGpo();
+            bms_readVB();
 
             HAL_Delay(500);
-            bms_wakeupChain();
-            bms_readSid();
 
-            timeDiff = getRuntimeMsDiff(timeStart);
-            printfDma("Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
-
-
-//            // Toggle GPIO
-//            bms_readConfigA();
-//            bms_wakeupChain();
-//            bms68_setGpo45(0b00);
-//            bms_wakeupChain();
-//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-//            bms_wakeupChain();
-//            bms_readConfigA();
-
-//            bmsState = INACTIVE;
+//            timeDiff = getRuntimeMsDiff(timeStart);
+//            printfDma("Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
+//
+//
+////            // Toggle GPIO
+////            bms_readConfigA();
+////            bms_wakeupChain();
+////            bms68_setGpo45(0b00);
+////            bms_wakeupChain();
+////            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+////            bms_wakeupChain();
+////            bms_readConfigA();
+//
+////            bmsState = INACTIVE;
             break;
 
         case INACTIVE:
@@ -257,10 +261,10 @@ int main(void)
         }
 
         HAL_Delay(1);
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
     }
   /* USER CODE END 3 */
 }
@@ -326,7 +330,7 @@ static void MX_LPUART1_UART_Init(void)
 
   /* USER CODE END LPUART1_Init 1 */
   hlpuart1.Instance = LPUART1;
-  hlpuart1.Init.BaudRate = 500000;
+  hlpuart1.Init.BaudRate = 1000000;
   hlpuart1.Init.WordLength = UART_WORDLENGTH_8B;
   hlpuart1.Init.StopBits = UART_STOPBITS_1;
   hlpuart1.Init.Parity = UART_PARITY_NONE;
@@ -488,9 +492,6 @@ static void MX_DMA_Init(void)
   /* DMA1_Channel1_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-  /* DMAMUX_OVR_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMAMUX_OVR_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMAMUX_OVR_IRQn);
 
 }
 
