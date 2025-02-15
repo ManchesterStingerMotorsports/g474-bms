@@ -61,6 +61,9 @@ enum
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+FDCAN_HandleTypeDef hfdcan1;
+FDCAN_HandleTypeDef hfdcan2;
+
 UART_HandleTypeDef hlpuart1;
 DMA_HandleTypeDef hdma_lpuart1_tx;
 
@@ -81,6 +84,8 @@ static void MX_LPUART1_UART_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM16_Init(void);
+static void MX_FDCAN1_Init(void);
+static void MX_FDCAN2_Init(void);
 /* USER CODE BEGIN PFP */
 
 uint32_t getRuntimeMs(void);
@@ -130,6 +135,8 @@ int main(void)
   MX_SPI1_Init();
   MX_TIM2_Init();
   MX_TIM16_Init();
+  MX_FDCAN1_Init();
+  MX_FDCAN2_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -146,15 +153,23 @@ int main(void)
     // Start Timer16
     HAL_TIM_Base_Start_IT(&htim16);
 
-    // Initialise BMS configs (No commands sent)
-    bms_init();
+//    // Initialise BMS configs (No commands sent)
+//    bms_init();
 
     uint32_t timeDiff = 0;
     uint32_t timeStart;
 
-    printfDma("Start Program \n\n");
+
+
+    const float deltaThreshold = 0.010; // In volts
+
+    printfDma("\n\n +++++             PROGRAM START             +++++ \n\n");
+
+    bms_softReset();
+    HAL_Delay(200);         // Initialisation delay
 
     bms_wakeupChain();
+    bms_init();             // Initialise BMS configs and send them
     bms_readSid();
 
     bmsState = IDLE;
@@ -166,30 +181,31 @@ int main(void)
         {
             if (bmsState == ACTIVE)
             {
-                const float delta_threshold = 0.005; // In volts
-                float discharge_threshold;
-
                 // Measure the current cell voltage first
-                printfDma("Measuring Cell Voltage: \n");
-                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-                bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-                bms_delayMsActive(12);
-                bms_readAvgCellVoltage();
+//                printfDma("Measuring Cell Voltage: \n");
+//                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+//                bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+//                bms_delayMsActive(12);
+//                bms_readAvgCellVoltage();
+//
+//                bms_startBalancing(deltaThreshold); // Uses the current C value, so need to measure the cell voltage first
 
-                // Calculate the discharge threshold
-                discharge_threshold = bms_calculateBalancing(delta_threshold);
+//                // Calculate the discharge threshold
+//                float discharge_threshold = bms_calculateBalancing(deltaThreshold);
+//
+//                // Check if need to balance the cells
+//                if (discharge_threshold > 0)
+//                {
+//                    printfDma("Start Discharge: \n");
+//                    bms_wakeupChain();
+//                    bms_startDischarge(discharge_threshold);
+//
+//                    bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+//                    bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+//                    bms_delayMsActive(12);
+//                }
 
-                // Check if need to balance the cells
-                if (discharge_threshold > 0)
-                {
-                    printfDma("Start Discharge: \n");
-                    bms_wakeupChain();
-                    bms_startDischarge(discharge_threshold);
-
-                    bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-                    bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-                    bms_delayMsActive(12);
-                }
+//                HAL_Delay(1000);
             }
             prevBmsState = bmsState;
         }
@@ -199,54 +215,63 @@ int main(void)
         {
         case ACTIVE:
 
-//            timeStart = getRuntimeMs();
-//
-////            printfDma("C Voltage: \n");
-////            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-////            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-////            bms_delayMsActive(12);
-////            bms_readAvgCellVoltage();
-//
-////            printfDma("OpenWire Check: \n");
-////            bms_wakeupChain();
-////            bms_delayMsActive(50);
-////            bms_openWireCheck();
-//
-//            printfDma("C Voltage (Do stuff): \n");
-//            for(int i = 0; i < 4; i++)
-//            {
-//                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-//                bms_readAvgCellVoltage();
-//                bms_delayMsActive(10);
-//            }
-//
-//            printfDma("Temp Meausurements: \n");
+            timeStart = getRuntimeMs();
+
+            printfDma("C Voltage: \n");
+            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+            bms_delayMsActive(12);
+            bms_readAvgCellVoltage();
+
+//            printfDma("OpenWire Check: \n");
 //            bms_wakeupChain();
+//            bms_delayMsActive(50);
+//            bms_openWireCheck();
+
+            HAL_Delay(100);
+//            printfDma("C Voltage (Do stuff): \n");
+            for (int i = 0; i < 3; i++)
+            {
+                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+                bms_readAvgCellVoltage();
+                bms_delayMsActive(20);
+            }
+
+            bms_wakeupChain();
+            printfDma("C Voltage (with interrupt): \n");
+            bms_balancingMeasureVoltage();
+//            printfDma("Temp Measurements: \n");
 //            bms_getAuxMeasurement();
+
+//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+//            bms_delayMsActive(12);
+
+            bms_startBalancing(deltaThreshold);
 
 //            bms_wakeupChain();
 //            bms_readSid();
 
-            bms_wakeupChain();
-            bms29_setGpo();
-            bms_readVB();
+//            bms_wakeupChain();
+//            bms29_setGpo();
+//            bms_readVB();
 
-            HAL_Delay(500);
+            printfFlushBuffer();
+            HAL_Delay(1500);
 
-//            timeDiff = getRuntimeMsDiff(timeStart);
-//            printfDma("Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
-//
-//
-////            // Toggle GPIO
-////            bms_readConfigA();
-////            bms_wakeupChain();
-////            bms68_setGpo45(0b00);
-////            bms_wakeupChain();
-////            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-////            bms_wakeupChain();
-////            bms_readConfigA();
-//
-////            bmsState = INACTIVE;
+            timeDiff = getRuntimeMsDiff(timeStart);
+            printfDma("Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
+
+
+//            // Toggle GPIO
+//            bms_readConfigA();
+//            bms_wakeupChain();
+//            bms68_setGpo45(0b00);
+//            bms_wakeupChain();
+//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+//            bms_wakeupChain();
+//            bms_readConfigA();
+
+//            bmsState = INACTIVE;
             break;
 
         case INACTIVE:
@@ -312,6 +337,92 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief FDCAN1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_FDCAN1_Init(void)
+{
+
+  /* USER CODE BEGIN FDCAN1_Init 0 */
+
+  /* USER CODE END FDCAN1_Init 0 */
+
+  /* USER CODE BEGIN FDCAN1_Init 1 */
+
+  /* USER CODE END FDCAN1_Init 1 */
+  hfdcan1.Instance = FDCAN1;
+  hfdcan1.Init.ClockDivider = FDCAN_CLOCK_DIV1;
+  hfdcan1.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+  hfdcan1.Init.Mode = FDCAN_MODE_NORMAL;
+  hfdcan1.Init.AutoRetransmission = DISABLE;
+  hfdcan1.Init.TransmitPause = DISABLE;
+  hfdcan1.Init.ProtocolException = DISABLE;
+  hfdcan1.Init.NominalPrescaler = 16;
+  hfdcan1.Init.NominalSyncJumpWidth = 1;
+  hfdcan1.Init.NominalTimeSeg1 = 1;
+  hfdcan1.Init.NominalTimeSeg2 = 1;
+  hfdcan1.Init.DataPrescaler = 1;
+  hfdcan1.Init.DataSyncJumpWidth = 1;
+  hfdcan1.Init.DataTimeSeg1 = 1;
+  hfdcan1.Init.DataTimeSeg2 = 1;
+  hfdcan1.Init.StdFiltersNbr = 0;
+  hfdcan1.Init.ExtFiltersNbr = 0;
+  hfdcan1.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
+  if (HAL_FDCAN_Init(&hfdcan1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN FDCAN1_Init 2 */
+
+  /* USER CODE END FDCAN1_Init 2 */
+
+}
+
+/**
+  * @brief FDCAN2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_FDCAN2_Init(void)
+{
+
+  /* USER CODE BEGIN FDCAN2_Init 0 */
+
+  /* USER CODE END FDCAN2_Init 0 */
+
+  /* USER CODE BEGIN FDCAN2_Init 1 */
+
+  /* USER CODE END FDCAN2_Init 1 */
+  hfdcan2.Instance = FDCAN2;
+  hfdcan2.Init.ClockDivider = FDCAN_CLOCK_DIV1;
+  hfdcan2.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+  hfdcan2.Init.Mode = FDCAN_MODE_NORMAL;
+  hfdcan2.Init.AutoRetransmission = DISABLE;
+  hfdcan2.Init.TransmitPause = DISABLE;
+  hfdcan2.Init.ProtocolException = DISABLE;
+  hfdcan2.Init.NominalPrescaler = 16;
+  hfdcan2.Init.NominalSyncJumpWidth = 1;
+  hfdcan2.Init.NominalTimeSeg1 = 1;
+  hfdcan2.Init.NominalTimeSeg2 = 1;
+  hfdcan2.Init.DataPrescaler = 1;
+  hfdcan2.Init.DataSyncJumpWidth = 1;
+  hfdcan2.Init.DataTimeSeg1 = 1;
+  hfdcan2.Init.DataTimeSeg2 = 1;
+  hfdcan2.Init.StdFiltersNbr = 0;
+  hfdcan2.Init.ExtFiltersNbr = 0;
+  hfdcan2.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
+  if (HAL_FDCAN_Init(&hfdcan2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN FDCAN2_Init 2 */
+
+  /* USER CODE END FDCAN2_Init 2 */
+
 }
 
 /**

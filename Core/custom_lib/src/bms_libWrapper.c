@@ -76,20 +76,22 @@ typedef struct
     ad68_pwma_t pwma;
     ad68_pwmb_t pwmb;
 
-    float v_avgCell[16];
+    float v_avgCell[16];        // Average of 8 samples register (C-ADC)
     float v_avgCell_sum;
     float v_avgCell_avg;
     float v_avgCell_min;
     float v_avgCell_max;
     float v_avgCell_delta;
 
-    float v_sCell[16];
+    float v_sCell[16];          // Reduntant (S-ADC) Value
 
     float v_tempSens[16];
     float v_segment;
 
     float temp_cell[16];
     float temp_ic;
+
+    uint16_t isDischarging;     // isDischarging Flag
 } ic_ad68_t;
 
 
@@ -123,12 +125,6 @@ void bms_resetConfig(void)
 
     ad68_cfa_t ad68_cfaT;
     memcpy(&ad68_cfaT, &ad68_cfaDefault, DATA_LEN);
-}
-
-
-void bms_init(void)
-{
-    bms_resetConfig();
 }
 
 
@@ -193,6 +189,20 @@ void bms_writePwmB(void)
 
     // write config B
     bms_transmitData(WRPWM2, txData);
+}
+
+
+void bms_init(void)
+{
+    bms_resetConfig();
+
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        ic_ad68[ic].cfa_Tx.refon = 0b1;
+        ic_ad68[ic].cfa_Tx.fc = 0b001;    // 110 Hz corner freq
+    }
+
+    bms_writeConfigA();
 }
 
 
@@ -287,9 +297,9 @@ void bms_startAdcvCont(void)
     // If RD = 1 and CONT = 1, PWM discharge stopped
 
     ADCV.CONT = 1;      // Continuous
-    ADCV.RD   = 1;      // Redundant Measurement
+    ADCV.RD   = 0;      // Redundant Measurement
     ADCV.DCP  = 0;      // Discharge permitted
-    ADCV.RSTF = 0;      // Reset filter
+    ADCV.RSTF = 1;      // Reset filter
     ADCV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
 
     // Behaviour of 2950 (ADI1 Command)
@@ -433,7 +443,8 @@ void bms_printTemps(float tArr[16])
 
 void bms_readAvgCellVoltage(void)
 {
-    uint8_t* cmdList[] = {RDACA, RDACB, RDACC, RDACD, RDACE, RDACF};
+//    uint8_t* cmdList[] = {RDACA, RDACB, RDACC, RDACD, RDACE, RDACF};
+    uint8_t* cmdList[] = {RDFCA, RDFCB, RDFCC, RDFCD, RDFCE, RDFCF}; // TODO: Temporary change command to read from filter register instead
 //    float  vBuffer[TOTAL_AD68][TOTAL_CELL];
 
     for (int i = 0; i < 6; i++)
@@ -469,6 +480,8 @@ void bms_readSVoltage(void)
         }
         bms_parseVoltage(rxData, ic_ad68[0].v_sCell, i);
     }
+
+    bms_printVoltage(ic_ad68[0].v_sCell);
 }
 
 
@@ -608,9 +621,9 @@ void bms_getAuxMeasurement(void)
 }
 
 
-void bms_setPwm(ic_ad68_t *ic, uint8_t cell)
+void bms_setPwm(ic_ad68_t *ic, uint8_t cell, uint8_t dutyCycle)
 {
-    const uint8_t dutyCycle = 0b0111;
+//    const uint8_t dutyCycle = 0b0111;
     cell++;                                 // Change from 0 indexing to 1 indexing
 
     switch (cell) {
@@ -669,7 +682,7 @@ void bms_setPwm(ic_ad68_t *ic, uint8_t cell)
 }
 
 
-float bms_calculateBalancing(float delta_threshold)
+float bms_calculateBalancing(float deltaThreshold)
 {
     float min = 999.0;
     float max = -999.0;
@@ -686,9 +699,9 @@ float bms_calculateBalancing(float delta_threshold)
         }
     }
 
-    if (max - min > delta_threshold)
+    if (max - min > deltaThreshold)
     {
-        return min + delta_threshold;
+        return min + deltaThreshold;
     }
     else
     {
@@ -702,20 +715,30 @@ void bms_startDischarge(float threshold)
     memset(&ic_ad68[0].pwma, 0, sizeof(ad68_pwma_t));
     memset(&ic_ad68[0].pwmb, 0, sizeof(ad68_pwmb_t));
 
-//    threshold = 1.5;          // Volts
+    const uint8_t dutyCycle = 0b1111;   // 4 bit pwm at 937 ms
 
-    for (int ic = 0; ic < TOTAL_AD68; ic++)
-    {
-        for (int c = 0; c < TOTAL_CELL; c++)
-        {
-            if (ic_ad68[ic].v_avgCell[c] > threshold)
-            {
-                bms_setPwm(&ic_ad68[ic], c);
-            }
-        }
-    }
+//    threshold = 5;          // Volts
 
-    ic_ad68[0].pwma.pwm1 = 0b0111;  // 4 bit pwm at 937 ms (for testing -> enables discharge for cell 1)
+    // for testing -> enables discharge for cell 1
+    printfDma("DISCHARGE: IC 1, CELL 1 \n");
+    ic_ad68[0].pwma.pwm1 = 0b1111;
+
+
+//    for (int ic = 0; ic < TOTAL_AD68; ic++)
+//    {
+//        for (int c = 0; c < TOTAL_CELL; c++)
+//        {
+//            if (ic_ad68[ic].v_avgCell[c] > threshold)
+//            {
+//                printfDma("DISCHARGE: IC %d, CELL %d \n", ic+1, c+1);
+//                bms_setPwm(&ic_ad68[ic], c, dutyCycle);
+//            }
+//            else
+//            {
+//                bms_setPwm(&ic_ad68[ic], c, 0b0000);    // Turn off PWM discharge for that cell
+//            }
+//        }
+//    }
 
     // The PWM discharge functionality is possible in the standby, REF-UP, extended balancing and in the measure states
     // AND while the discharge timeout has not expired (DCTO ≠ 0)
@@ -732,9 +755,16 @@ void bms_startDischarge(float threshold)
 
 void bms_stopDischarge(void)
 {
+    // TODO: Stop discharege without resetting
+    bms_softReset();
+}
+
+
+void bms_softReset(void)
+{
     bms_wakeupChain();
     bms_transmitCmd(SRST);      // Put all devices to sleep
-    printfDma("--- SOFT RESET --- \n");
+    printfDma("\n  ---  SOFT RESET  ---  \n");
 }
 
 
@@ -758,5 +788,49 @@ void bms_readVB(void)
     float vb2 = *((int16_t *)(rxData[0] + 4)) * -0.000085 * 751;
     printfDma("VB: %fV, %fV  \n\n", vb1, vb2);
 }
+
+
+void bms_balancingMeasureVoltage(void)
+{
+    // 6830
+    // For DCP = 0
+    // If RD = 0 and CONT = 1, PWM discharge is permitted
+    // If RD = 1 and CONT = 0, PWM discharge interrupted temporarily until RD conversion finished (8ms typ)
+    // If RD = 1 and CONT = 1, PWM discharge stopped
+
+    ADCV.CONT = 1;      // Continuous
+    ADCV.RD   = 1;      // Redundant Measurement
+    ADCV.DCP  = 0;      // Discharge permitted
+    ADCV.RSTF = 1;      // Reset filter
+    ADCV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
+    bms_transmitCmd((uint8_t *)&ADCV);
+
+
+    bms_delayMsActive(10);
+//    bms_transmitPoll(PLSADC);
+    bms_readAvgCellVoltage();
+    bms_readSVoltage();
+
+
+    ADCV.CONT = 0;      // Continuous
+    ADCV.RD   = 1;      // Redundant Measurement
+    ADCV.DCP  = 0;      // Discharge permitted
+    ADCV.RSTF = 0;      // Reset filter
+    ADCV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
+    bms_transmitCmd((uint8_t *)&ADCV);
+}
+
+
+void bms_startBalancing(float deltaThreshold)
+{
+    float dischargeThreshold = bms_calculateBalancing(deltaThreshold);
+
+    if (true)
+//    if (dischargeThreshold > 0)
+    {
+        bms_startDischarge(dischargeThreshold);
+    }
+}
+
 
 

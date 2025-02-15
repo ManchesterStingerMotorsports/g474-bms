@@ -11,5 +11,7 @@
 
 int printfDma(const char *format, ...);
 
+void printfFlushBuffer(void);
+
 
 #endif /* INC_UARTDMA_H_ */

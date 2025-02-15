@@ -109,12 +109,6 @@ int printfDma(const char *format, ...)
             head = 0;
         }
 
-//        // Overflow handling (overwrite oldest data)
-//        if (is_full)
-//        {
-//            tail = (tail + 1) % BUFFER_SIZE;
-//        }
-
         if (head == tail)
         {
             Error_Handler();
@@ -127,4 +121,14 @@ int printfDma(const char *format, ...)
     }
 
     return written;
+}
+
+
+
+void printfFlushBuffer(void)
+{
+    if (HAL_UART_GetState(&uartHandle) == HAL_UART_STATE_READY)
+    {
+        startUartDmaTx();
+    }
 }

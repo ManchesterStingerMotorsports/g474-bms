@@ -35,11 +35,19 @@ void bms_openWireCheck(void);
 void bms_getAuxMeasurement(void);
 
 
-float bms_calculateBalancing(float delta_threshold);
+float bms_calculateBalancing(float deltaThreshold);
 
 void bms_startDischarge(float threshold);
+
 void bms_stopDischarge(void);
+void bms_softReset(void);
+
 
 void bms29_setGpo(void);
+
 void bms_readVB(void);
+
+void bms_balancingMeasureVoltage(void);
+
+void bms_startBalancing(float deltaThreshold);
 
