@@ -32,20 +32,27 @@
 
 #include "uartDMA.h"
 
-
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
-enum
+
+const float deltaThreshold = 0.010; // In volts
+
+
+typedef enum
 {
     ACTIVE,
     BALANCING,
     CHARGING,
     INACTIVE,
     IDLE,
-} bmsState, prevBmsState;
+} BmsStates;
+
+volatile BmsStates bmsState;         // Controlled by ISR
+volatile BmsStates bmsCurrState;
+volatile BmsStates bmsPrevState;
 
 
 /* USER CODE END PTD */
@@ -159,10 +166,6 @@ int main(void)
     uint32_t timeDiff = 0;
     uint32_t timeStart;
 
-
-
-    const float deltaThreshold = 0.010; // In volts
-
     printfDma("\n\n +++++             PROGRAM START             +++++ \n\n");
 
     bms_softReset();
@@ -173,11 +176,14 @@ int main(void)
     bms_readSid();
 
     bmsState = IDLE;
-    prevBmsState = IDLE;
+    bmsPrevState = IDLE;
+    bmsCurrState = IDLE;
 
     while (1)
     {
-        if (prevBmsState != bmsState)
+        bmsCurrState = bmsState;        // Copy value to ensure value is not changed throughout the loop
+
+        if (bmsPrevState != bmsCurrState)
         {
             if (bmsState == ACTIVE)
             {
@@ -207,11 +213,11 @@ int main(void)
 
 //                HAL_Delay(1000);
             }
-            prevBmsState = bmsState;
+            bmsPrevState = bmsCurrState;
         }
 
 
-        switch(bmsState)
+        switch(bmsCurrState)
         {
         case ACTIVE:
 
@@ -229,17 +235,21 @@ int main(void)
 //            bms_openWireCheck();
 
             HAL_Delay(100);
-//            printfDma("C Voltage (Do stuff): \n");
-            for (int i = 0; i < 3; i++)
+            bms_wakeupChain();
+            printfDma("======== BALANCING MEASUREMENT ======== \n");
+            for (int i = 0; i < 10; i++)
             {
-                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-                bms_readAvgCellVoltage();
-                bms_delayMsActive(20);
+//                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+//                bms_readAvgCellVoltage();
+//                bms_delayMsActive(20);
+                printfDma("======================================= \n");
             }
+            printfDma("======================================= \n");
 
             bms_wakeupChain();
             printfDma("C Voltage (with interrupt): \n");
             bms_balancingMeasureVoltage();
+
 //            printfDma("Temp Measurements: \n");
 //            bms_getAuxMeasurement();
 
@@ -254,13 +264,14 @@ int main(void)
 //            bms_wakeupChain();
 //            bms29_setGpo();
 //            bms_readVB();
+//            bms_readCurrent();
+
 
             printfFlushBuffer();
             HAL_Delay(1500);
 
             timeDiff = getRuntimeMsDiff(timeStart);
             printfDma("Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
-
 
 //            // Toggle GPIO
 //            bms_readConfigA();
@@ -272,6 +283,7 @@ int main(void)
 //            bms_readConfigA();
 
 //            bmsState = INACTIVE;
+
             break;
 
         case INACTIVE:
@@ -614,8 +626,8 @@ static void MX_DMA_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+  /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
@@ -675,8 +687,8 @@ static void MX_GPIO_Init(void)
   HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */

@@ -46,6 +46,7 @@ void bms_softReset(void);
 void bms29_setGpo(void);
 
 void bms_readVB(void);
+void bms_readCurrent(void);
 
 void bms_balancingMeasureVoltage(void);
 

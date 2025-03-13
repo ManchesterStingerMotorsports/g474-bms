@@ -720,25 +720,25 @@ void bms_startDischarge(float threshold)
 //    threshold = 5;          // Volts
 
     // for testing -> enables discharge for cell 1
-    printfDma("DISCHARGE: IC 1, CELL 1 \n");
-    ic_ad68[0].pwma.pwm1 = 0b1111;
+//    printfDma("DISCHARGE: IC 1, CELL 1 \n");
+//    ic_ad68[0].pwma.pwm1 = 0b1111;
 
 
-//    for (int ic = 0; ic < TOTAL_AD68; ic++)
-//    {
-//        for (int c = 0; c < TOTAL_CELL; c++)
-//        {
-//            if (ic_ad68[ic].v_avgCell[c] > threshold)
-//            {
-//                printfDma("DISCHARGE: IC %d, CELL %d \n", ic+1, c+1);
-//                bms_setPwm(&ic_ad68[ic], c, dutyCycle);
-//            }
-//            else
-//            {
-//                bms_setPwm(&ic_ad68[ic], c, 0b0000);    // Turn off PWM discharge for that cell
-//            }
-//        }
-//    }
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        for (int c = 0; c < TOTAL_CELL; c++)
+        {
+            if (ic_ad68[ic].v_avgCell[c] > threshold)
+            {
+                printfDma("DISCHARGE: IC %d, CELL %d \n", ic+1, c+1);
+                bms_setPwm(&ic_ad68[ic], c, dutyCycle);
+            }
+            else
+            {
+                bms_setPwm(&ic_ad68[ic], c, 0b0000);    // Turn off PWM discharge for that cell
+            }
+        }
+    }
 
     // The PWM discharge functionality is possible in the standby, REF-UP, extended balancing and in the measure states
     // AND while the discharge timeout has not expired (DCTO ≠ 0)
@@ -790,6 +790,33 @@ void bms_readVB(void)
 }
 
 
+
+void bms_readCurrent(void)
+{
+    bms_receiveData(RDI, rxData, rxPec, rxCc);
+    bms_checkRxFault(rxData, rxPec, rxCc);
+    bms_printRawData(rxData, rxCc);
+
+    // microvolts
+    int32_t i1v = 0;
+    int32_t i2v = 0;
+
+    i1v = ((uint32_t)rxData[0]) | ((uint32_t)rxData[1] << 8) | ((int32_t)rxData[2] << 16);
+    i2v = ((uint32_t)rxData[3]) | ((uint32_t)rxData[4] << 8) | ((int32_t)rxData[5] << 16);
+
+    if (i1v & UINT32_C(1) << 24) { i1v |= 0xFF000000; }; // Check the sign bit (24th bit) and extend the sign
+    if (i2v & UINT32_C(1) << 24) { i2v |= 0xFF000000; };
+
+    const float SHUNT_RESISTANCE = 0.000050; // 50 microOhms
+
+    float current1 = (float)i1v / SHUNT_RESISTANCE;
+    float current2 = (float)i2v / SHUNT_RESISTANCE;
+
+    printfDma("Current: %fA, %fA  \n\n", current1 , current2);
+}
+
+
+
 void bms_balancingMeasureVoltage(void)
 {
     // 6830
@@ -809,7 +836,7 @@ void bms_balancingMeasureVoltage(void)
     bms_delayMsActive(10);
 //    bms_transmitPoll(PLSADC);
     bms_readAvgCellVoltage();
-    bms_readSVoltage();
+//    bms_readSVoltage();
 
 
     ADCV.CONT = 0;      // Continuous
@@ -825,8 +852,8 @@ void bms_startBalancing(float deltaThreshold)
 {
     float dischargeThreshold = bms_calculateBalancing(deltaThreshold);
 
-    if (true)
-//    if (dischargeThreshold > 0)
+//    if (true)
+    if (dischargeThreshold > 0)
     {
         bms_startDischarge(dischargeThreshold);
     }
