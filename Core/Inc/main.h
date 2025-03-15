@@ -56,6 +56,14 @@ extern TIM_HandleTypeDef htim2;
 #define TOTAL_CELL      16
 #define TOTAL_AD68      (TOTAL_IC - 1)
 
+#define BIT_SET(byte,nbit)   ((byte) |=  (UINT32_C(1) << (nbit)))
+#define BIT_CLEAR(byte,nbit) ((byte) &= ~(UINT32_C(1) << (nbit)))
+#define BIT_CHECK(byte,nbit) ((byte) &   (UINT32_C(1) << (nbit)))
+#define BIT_FLIP(byte,nbit)  ((byte) ^=  (UINT32_C(1) << (nbit)))
+
+
+
+
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/

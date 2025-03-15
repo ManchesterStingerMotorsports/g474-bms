@@ -179,12 +179,20 @@ int main(void)
     bmsPrevState = IDLE;
     bmsCurrState = IDLE;
 
+
+
     while (1)
     {
         bmsCurrState = bmsState;        // Copy value to ensure value is not changed throughout the loop
 
         if (bmsPrevState != bmsCurrState)
         {
+            bms_wakeupChain();
+            bms_init();             // Initialise BMS configs and send them
+            bms_readSid();
+            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+            bms29_setGpo();
+
             if (bmsState == ACTIVE)
             {
                 // Measure the current cell voltage first
@@ -223,32 +231,33 @@ int main(void)
 
             timeStart = getRuntimeMs();
 
-            printfDma("C Voltage: \n");
-            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-            bms_delayMsActive(12);
-            bms_readAvgCellVoltage();
+//            printfDma("C Voltage: \n");
+//            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+//            bms_delayMsActive(12);
+//            bms_readAvgCellVoltage();
+//            bms_readSVoltage();
 
 //            printfDma("OpenWire Check: \n");
 //            bms_wakeupChain();
 //            bms_delayMsActive(50);
 //            bms_openWireCheck();
 
-            HAL_Delay(100);
-            bms_wakeupChain();
-            printfDma("======== BALANCING MEASUREMENT ======== \n");
-            for (int i = 0; i < 10; i++)
-            {
-//                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+//            HAL_Delay(100);
+//            bms_wakeupChain();
+//            printfDma("======== BALANCING MEASUREMENT ======== \n");
+//            for (int i = 0; i < 3; i++)
+//            {
 //                bms_readAvgCellVoltage();
 //                bms_delayMsActive(20);
-                printfDma("======================================= \n");
-            }
-            printfDma("======================================= \n");
+//            }
+//            printfDma("======================================= \n");
 
-            bms_wakeupChain();
-            printfDma("C Voltage (with interrupt): \n");
-            bms_balancingMeasureVoltage();
+
+//            bms_wakeupChain();
+//            printfDma("C Voltage (with interrupt): \n");
+//            bms_balancingMeasureVoltage();
+//            HAL_Delay(500);
 
 //            printfDma("Temp Measurements: \n");
 //            bms_getAuxMeasurement();
@@ -256,19 +265,23 @@ int main(void)
 //            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
 //            bms_delayMsActive(12);
 
-            bms_startBalancing(deltaThreshold);
+//            bms_startBalancing(deltaThreshold);
 
 //            bms_wakeupChain();
 //            bms_readSid();
 
+            bms_wakeupChain();
+            bms29_readVB();
+            bms29_readCurrent();
+            HAL_Delay(500);
+
+//            printfFlushBuffer();
 //            bms_wakeupChain();
-//            bms29_setGpo();
-//            bms_readVB();
-//            bms_readCurrent();
-
-
-            printfFlushBuffer();
-            HAL_Delay(1500);
+//            bms68_setGpo45(0b00);
+//            HAL_Delay(1000);
+//            bms_wakeupChain();
+//            bms68_setGpo45(0b11);
+//            HAL_Delay(500);
 
             timeDiff = getRuntimeMsDiff(timeStart);
             printfDma("Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
@@ -750,9 +763,11 @@ void Error_Handler(void)
   __disable_irq();
   while (1)
   {
+
   }
   /* USER CODE END Error_Handler_Debug */
 }
+
 
 #ifdef  USE_FULL_ASSERT
 /**

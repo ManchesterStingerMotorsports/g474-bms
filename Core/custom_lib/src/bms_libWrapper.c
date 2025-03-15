@@ -441,6 +441,8 @@ void bms_printTemps(float tArr[16])
 }
 
 
+// TODO: different options of read commands
+
 void bms_readAvgCellVoltage(void)
 {
 //    uint8_t* cmdList[] = {RDACA, RDACB, RDACC, RDACD, RDACE, RDACF};
@@ -717,7 +719,7 @@ void bms_startDischarge(float threshold)
 
     const uint8_t dutyCycle = 0b1111;   // 4 bit pwm at 937 ms
 
-//    threshold = 5;          // Volts
+//    threshold = 2;          // Overwrite the discharge aim voltage
 
     // for testing -> enables discharge for cell 1
 //    printfDma("DISCHARGE: IC 1, CELL 1 \n");
@@ -779,11 +781,11 @@ void bms29_setGpo(void)
 }
 
 
-void bms_readVB(void)
+void bms29_readVB(void)
 {
     bms_receiveData(RDVB, rxData, rxPec, rxCc);
     bms_checkRxFault(rxData, rxPec, rxCc);
-    bms_printRawData(rxData, rxCc);
+//    bms_printRawData(rxData, rxCc);
     float vb1 = *((int16_t *)(rxData[0] + 2)) *  0.000100 * 396.604395604;
     float vb2 = *((int16_t *)(rxData[0] + 4)) * -0.000085 * 751;
     printfDma("VB: %fV, %fV  \n\n", vb1, vb2);
@@ -791,26 +793,26 @@ void bms_readVB(void)
 
 
 
-void bms_readCurrent(void)
+void bms29_readCurrent(void)
 {
     bms_receiveData(RDI, rxData, rxPec, rxCc);
     bms_checkRxFault(rxData, rxPec, rxCc);
-    bms_printRawData(rxData, rxCc);
+//    bms_printRawData(rxData, rxCc);
 
     // microvolts
     int32_t i1v = 0;
     int32_t i2v = 0;
 
-    i1v = ((uint32_t)rxData[0]) | ((uint32_t)rxData[1] << 8) | ((int32_t)rxData[2] << 16);
-    i2v = ((uint32_t)rxData[3]) | ((uint32_t)rxData[4] << 8) | ((int32_t)rxData[5] << 16);
+    i1v = ((uint32_t)rxData[0][0]) | ((uint32_t)rxData[0][1] << 8) | ((int32_t)rxData[0][2] << 16);
+    i2v = ((uint32_t)rxData[0][3]) | ((uint32_t)rxData[0][4] << 8) | ((int32_t)rxData[0][5] << 16);
 
-    if (i1v & UINT32_C(1) << 24) { i1v |= 0xFF000000; }; // Check the sign bit (24th bit) and extend the sign
-    if (i2v & UINT32_C(1) << 24) { i2v |= 0xFF000000; };
+    if (i1v & (UINT32_C(1) << 23)) { i1v |= 0xFF000000; }; // Check the sign bit (24th bit) and extend the sign
+    if (i2v & (UINT32_C(1) << 23)) { i2v |= 0xFF000000; };
 
     const float SHUNT_RESISTANCE = 0.000050; // 50 microOhms
 
-    float current1 = (float)i1v / SHUNT_RESISTANCE;
-    float current2 = (float)i2v / SHUNT_RESISTANCE;
+    float current1 = ((float)i1v / 1000000.0f) / SHUNT_RESISTANCE;
+    float current2 = ((float)i2v / 1000000.0f) / SHUNT_RESISTANCE;
 
     printfDma("Current: %fA, %fA  \n\n", current1 , current2);
 }
@@ -832,12 +834,10 @@ void bms_balancingMeasureVoltage(void)
     ADCV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
     bms_transmitCmd((uint8_t *)&ADCV);
 
-
     bms_delayMsActive(10);
 //    bms_transmitPoll(PLSADC);
     bms_readAvgCellVoltage();
 //    bms_readSVoltage();
-
 
     ADCV.CONT = 0;      // Continuous
     ADCV.RD   = 1;      // Redundant Measurement
