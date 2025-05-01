@@ -344,13 +344,13 @@ void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_C
         for (int c = cellArrIndex; c < (cellArrIndex + 3); c++)
         {
             if (c == 3 || c == 4) continue; // Skip digital output pins
-            int ci = c;
+            int ci = c;                     // compensate for skipped digital pins
             if (c > 4)
             {
                 ci -= 2;
             }
 
-            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(ic_ad68_t)) + (ci + 8*muxIndex)) = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
+            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(ic_ad68_t)) + (ci * (2*muxIndex) + muxIndex)) = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
 //            vArr[ic-1][ci + 8*muxIndex] = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
 
             if (cell_index == 3)
@@ -586,29 +586,36 @@ void bms_parseTemps(void)
 
 void bms_getAuxMeasurement(void)
 {
+    /*
+     *  GPO4 = Mux switch
+     *  GPO5 = 3V3 Converter Enable
+     *
+     *  20ms start-up time based on TEC 2-4810WI datasheet
+     */
+
     ADAX.OW   = 0b0;
     ADAX.CH   = 0b0000;
     ADAX.CH4  = 0b0;
     ADAX.PUP  = 0b0;
 
-//    bms_startTimer();
+    //    bms_startTimer();
 
     bms_wakeupChain();
-    bms68_setGpo45(0b10);
-    bms_delayMsActive(5);
+    bms68_setGpo45(0b01);           // Enable 3V3 Converter
+    bms_delayMsActive(25);          // 20ms start-up time based on TEC 2-4810WI datasheet
 
     bms_transmitCmd((uint8_t *)&ADAX);
     bms_transmitPoll(PLAUX1);
-
     bms_getAuxVoltage(0);
-    bms68_setGpo45(0b11);
-    bms_delayMsActive(5);
+
+    bms68_setGpo45(0b11);           // Switch to the other Mux Channel
+    bms_delayMsActive(5);           // Small delay for switching
 
     bms_transmitCmd((uint8_t *)&ADAX);
     bms_transmitPoll(PLAUX1);
-
     bms_getAuxVoltage(1);
-    bms68_setGpo45(0b00);
+
+    bms68_setGpo45(0b00);           // Turn off converter
 
     bms_parseTemps();
     bms_printVoltage(ic_ad68[0].v_tempSens);
@@ -714,17 +721,11 @@ float bms_calculateBalancing(float deltaThreshold)
 
 void bms_startDischarge(float threshold)
 {
-    memset(&ic_ad68[0].pwma, 0, sizeof(ad68_pwma_t));
-    memset(&ic_ad68[0].pwmb, 0, sizeof(ad68_pwmb_t));
-
+    threshold = 5;  // Overwrite the discharge aim voltage (for testing)
     const uint8_t dutyCycle = 0b1111;   // 4 bit pwm at 937 ms
 
-//    threshold = 2;          // Overwrite the discharge aim voltage
-
-    // for testing -> enables discharge for cell 1
-//    printfDma("DISCHARGE: IC 1, CELL 1 \n");
-//    ic_ad68[0].pwma.pwm1 = 0b1111;
-
+    memset(&ic_ad68[0].pwma, 0, sizeof(ad68_pwma_t));
+    memset(&ic_ad68[0].pwmb, 0, sizeof(ad68_pwmb_t));
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
@@ -741,6 +742,11 @@ void bms_startDischarge(float threshold)
             }
         }
     }
+
+    // for testing -> enables discharge for cell 1
+    printfDma("DISCHARGE: IC 1, CELL 1 \n");
+    ic_ad68[0].pwma.pwm1 = 0b1111;
+
 
     // The PWM discharge functionality is possible in the standby, REF-UP, extended balancing and in the measure states
     // AND while the discharge timeout has not expired (DCTO ≠ 0)
@@ -822,29 +828,19 @@ void bms29_readCurrent(void)
 void bms_balancingMeasureVoltage(void)
 {
     // 6830
-    // For DCP = 0
-    // If RD = 0 and CONT = 1, PWM discharge is permitted
-    // If RD = 1 and CONT = 0, PWM discharge interrupted temporarily until RD conversion finished (8ms typ)
-    // If RD = 1 and CONT = 1, PWM discharge stopped
+    // ADSV For triggering single shot S conversion (stops PWM) while C in unaffected
+    // So this stops PWM and wait for S to finish
+    // Then read the S voltage
+    // Potential improvement: S vs C ADC comparison
 
-    ADCV.CONT = 1;      // Continuous
-    ADCV.RD   = 1;      // Redundant Measurement
-    ADCV.DCP  = 0;      // Discharge permitted
-    ADCV.RSTF = 1;      // Reset filter
-    ADCV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
-    bms_transmitCmd((uint8_t *)&ADCV);
+    ADSV.CONT = 0;      // Continuous
+    ADSV.DCP  = 0;      // Discharge permitted
+    ADSV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
 
-    bms_delayMsActive(10);
-//    bms_transmitPoll(PLSADC);
-    bms_readAvgCellVoltage();
-//    bms_readSVoltage();
+    bms_transmitCmd((uint8_t *)&ADSV);
 
-    ADCV.CONT = 0;      // Continuous
-    ADCV.RD   = 1;      // Redundant Measurement
-    ADCV.DCP  = 0;      // Discharge permitted
-    ADCV.RSTF = 0;      // Reset filter
-    ADCV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
-    bms_transmitCmd((uint8_t *)&ADCV);
+    bms_transmitPoll(PLSADC);
+    bms_readSVoltage();
 }
 
 
@@ -852,8 +848,7 @@ void bms_startBalancing(float deltaThreshold)
 {
     float dischargeThreshold = bms_calculateBalancing(deltaThreshold);
 
-//    if (true)
-    if (dischargeThreshold > 0)
+//    if (dischargeThreshold > 0)
     {
         bms_startDischarge(dischargeThreshold);
     }

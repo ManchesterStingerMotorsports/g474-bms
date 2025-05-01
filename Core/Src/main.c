@@ -243,29 +243,31 @@ int main(void)
 //            bms_delayMsActive(50);
 //            bms_openWireCheck();
 
-//            HAL_Delay(100);
-//            bms_wakeupChain();
-//            printfDma("======== BALANCING MEASUREMENT ======== \n");
-//            for (int i = 0; i < 3; i++)
-//            {
-//                bms_readAvgCellVoltage();
-//                bms_delayMsActive(20);
-//            }
-//            printfDma("======================================= \n");
+            HAL_Delay(100);
+            bms_wakeupChain();
+            printfDma("======== C VOLTAGE MEASUREMENT ======== \n");
+            for (int i = 0; i < 3; i++)
+            {
+                bms_readAvgCellVoltage();
+                bms_delayMsActive(50);
+            }
+            printfDma("======================================= \n\n");
 
 
-//            bms_wakeupChain();
-//            printfDma("C Voltage (with interrupt): \n");
-//            bms_balancingMeasureVoltage();
-//            HAL_Delay(500);
+            bms_wakeupChain();
+            printfDma("Single Shot S Voltage (PWM Interrupted): \n");
+            bms_balancingMeasureVoltage();
 
-//            printfDma("Temp Measurements: \n");
-//            bms_getAuxMeasurement();
+
+            printfDma("Temp Measurements: \n");
+            bms_getAuxMeasurement();
 
 //            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
 //            bms_delayMsActive(12);
 
-//            bms_startBalancing(deltaThreshold);
+            bms_wakeupChain();
+            bms_startBalancing(deltaThreshold);
+            HAL_Delay(500);
 
 //            bms_wakeupChain();
 //            bms_readSid();
@@ -273,15 +275,13 @@ int main(void)
             bms_wakeupChain();
             bms29_readVB();
             bms29_readCurrent();
-            HAL_Delay(500);
 
-//            printfFlushBuffer();
-//            bms_wakeupChain();
-//            bms68_setGpo45(0b00);
-//            HAL_Delay(1000);
-//            bms_wakeupChain();
-//            bms68_setGpo45(0b11);
-//            HAL_Delay(500);
+
+
+
+            bms_wakeupChain();
+            bms68_setGpo45(0b11);
+            HAL_Delay(500);
 
             timeDiff = getRuntimeMsDiff(timeStart);
             printfDma("Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
