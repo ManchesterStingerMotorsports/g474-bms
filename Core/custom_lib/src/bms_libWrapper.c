@@ -350,7 +350,8 @@ void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_C
                 ci -= 2;
             }
 
-            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(ic_ad68_t)) + (ci * (2*muxIndex) + muxIndex)) = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
+            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(ic_ad68_t)) + (ci * 2 + muxIndex)) = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
+//            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(ic_ad68_t)) + (ci + (8*muxIndex))) = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
 //            vArr[ic-1][ci + 8*muxIndex] = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
 
             if (cell_index == 3)
@@ -601,15 +602,17 @@ void bms_getAuxMeasurement(void)
     //    bms_startTimer();
 
     bms_wakeupChain();
-    bms68_setGpo45(0b01);           // Enable 3V3 Converter
+
+    // TODO: CHANGE THE NAME ITS 54 SHOULD
+    bms68_setGpo45(0b11);           // Enable 3V3 Converter
     bms_delayMsActive(25);          // 20ms start-up time based on TEC 2-4810WI datasheet
 
     bms_transmitCmd((uint8_t *)&ADAX);
     bms_transmitPoll(PLAUX1);
     bms_getAuxVoltage(0);
 
-    bms68_setGpo45(0b11);           // Switch to the other Mux Channel
-    bms_delayMsActive(5);           // Small delay for switching
+    bms68_setGpo45(0b10);           // Switch to the other Mux Channel
+    bms_delayMsActive(25);           // Small delay for switching
 
     bms_transmitCmd((uint8_t *)&ADAX);
     bms_transmitPoll(PLAUX1);
@@ -744,8 +747,8 @@ void bms_startDischarge(float threshold)
     }
 
     // for testing -> enables discharge for cell 1
-    printfDma("DISCHARGE: IC 1, CELL 1 \n");
-    ic_ad68[0].pwma.pwm1 = 0b1111;
+//    printfDma("DISCHARGE: IC 1, CELL 1 \n");
+//    ic_ad68[0].pwma.pwm1 = 0b1111;
 
 
     // The PWM discharge functionality is possible in the standby, REF-UP, extended balancing and in the measure states
@@ -848,7 +851,7 @@ void bms_startBalancing(float deltaThreshold)
 {
     float dischargeThreshold = bms_calculateBalancing(deltaThreshold);
 
-//    if (dischargeThreshold > 0)
+    if (dischargeThreshold > 0)
     {
         bms_startDischarge(dischargeThreshold);
     }

@@ -277,12 +277,6 @@ int main(void)
             bms29_readCurrent();
 
 
-
-
-            bms_wakeupChain();
-            bms68_setGpo45(0b11);
-            HAL_Delay(500);
-
             timeDiff = getRuntimeMsDiff(timeStart);
             printfDma("Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
 
