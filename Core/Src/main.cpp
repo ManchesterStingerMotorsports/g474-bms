@@ -187,7 +187,7 @@ int main(void)
 //            bms_openWireCheck();
 
             bms_wakeupChain();
-            bms_getAuxMeasurement();
+//            bms_getAuxMeasurement();
 
 
             timeDiff = getRuntimeMsDiff(timeStart);
@@ -195,14 +195,25 @@ int main(void)
             HAL_UART_Transmit(&hlpuart1, (uint8_t*)message, strlen(message), HAL_MAX_DELAY);
 
 
-//            // Toggle GPIO
-//            bms_readConfigA();
-//            bms_wakeupChain();
-//            bms68_setGpo45(0b00);
+            HAL_Delay(100);
+
+            // Toggle GPIO
+            bms_wakeupChain();
+            bms_readConfigA();
+
+            bms_wakeupChain();
+            bms68_setGpo45(0b00);
+
+            HAL_Delay(100);
+
+            bms_wakeupChain();
+            bms68_setGpo45(0b11);
+
 //            bms_wakeupChain();
 //            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-//            bms_wakeupChain();
-//            bms_readConfigA();
+
+            bms_wakeupChain();
+            bms_readConfigA();
 
 
             bmsState = INACTIVE;
