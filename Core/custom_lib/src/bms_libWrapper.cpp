@@ -386,6 +386,8 @@ void bms_readSVoltage(void)
         }
         bms_parseVoltage(rxData, ic_ad68[0].v_sCell, i);
     }
+
+    bms_printVoltage(ic_ad68[0].v_sCell);
 }
 
 

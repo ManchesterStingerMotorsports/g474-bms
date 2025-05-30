@@ -154,10 +154,10 @@ int main(void)
     // Initialise BMS configs (No commands sent)
     bms_init();
 
-    char message[50];
-
-    uint32_t timeDiff = 0;
-    uint32_t timeStart;
+//    char message[50];
+//
+//    uint32_t timeDiff = 0;
+//    uint32_t timeStart;
 
     printf("Start Program \n\n");
 
@@ -173,48 +173,44 @@ int main(void)
 
         case ACTIVE:
 
-            timeStart = getRuntimeMs();
+//            timeStart = getRuntimeMs();
 
-
-
+            printf("\nC Voltage: \n");
             bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
             bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
             bms_delayMsActive(12);
             bms_readAvgCellVoltage();
 
-
-//            bms_delayMsActive(50);
-//            bms_openWireCheck();
-
+            printf("\nS Voltage: \n");
             bms_wakeupChain();
-//            bms_getAuxMeasurement();
+            bms_readSVoltage();
 
-
-            timeDiff = getRuntimeMsDiff(timeStart);
-            sprintf(message, "Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
-            HAL_UART_Transmit(&hlpuart1, (uint8_t*)message, strlen(message), HAL_MAX_DELAY);
-
-
-            HAL_Delay(100);
-
-            // Toggle GPIO
+            printf("\nAux Measurements: \n");
             bms_wakeupChain();
-            bms_readConfigA();
+            bms_getAuxMeasurement();
 
-            bms_wakeupChain();
-            bms68_setGpo45(0b00);
+            HAL_Delay(50);
 
-            HAL_Delay(100);
-
-            bms_wakeupChain();
-            bms68_setGpo45(0b11);
-
+//            // Toggle GPIO
 //            bms_wakeupChain();
-//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+//            bms_readConfigA();
+//
+//            bms_wakeupChain();
+//            bms68_setGpo45(0b00);       // Default is 1
+//
+//            HAL_Delay(1000);
+//
+//            bms_wakeupChain();
+//            bms68_setGpo45(0b11);
+//
+//            bms_wakeupChain();
+//            bms_readConfigA();
 
-            bms_wakeupChain();
-            bms_readConfigA();
+            printf("\n\n");
 
+//            timeDiff = getRuntimeMsDiff(timeStart);
+//            sprintf(message, "Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
+//            HAL_UART_Transmit(&hlpuart1, (uint8_t*)message, strlen(message), HAL_MAX_DELAY);
 
             bmsState = INACTIVE;
 
