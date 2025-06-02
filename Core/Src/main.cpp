@@ -195,13 +195,13 @@ int main(void)
 //            bms_wakeupChain();
 //            bms_readConfigA();
 //
-//            bms_wakeupChain();
-//            bms68_setGpo45(0b00);       // Default is 1
-//
-//            HAL_Delay(1000);
-//
-//            bms_wakeupChain();
-//            bms68_setGpo45(0b11);
+            bms_wakeupChain();
+            bms68_setGpo45(0b00);       // Default is 1
+
+            HAL_Delay(500);
+
+            bms_wakeupChain();
+            bms68_setGpo45(0b11);
 //
 //            bms_wakeupChain();
 //            bms_readConfigA();

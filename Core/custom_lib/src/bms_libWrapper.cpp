@@ -496,7 +496,7 @@ void bms_getAuxMeasurement(void)
 //    bms_startTimer();
 
     bms_wakeupChain();
-    bms68_setGpo45(0b10);
+    bms68_setGpo45(0b11);
     bms_delayMsActive(5);
 
     bms_transmitCmd((uint8_t *)&ADAX);
@@ -507,20 +507,21 @@ void bms_getAuxMeasurement(void)
 //    bms_wakeupChain();
 
     bms_wakeupChain();
-    bms68_setGpo45(0b01);
+    bms68_setGpo45(0b00);
     bms_delayMsActive(5);
-
 
     bms_transmitCmd((uint8_t *)&ADAX);
     bms_transmitPoll(PLAUX1);
 
     bms_getAuxVoltage(1);
+
+
     bms_printVoltage(ic_ad68[0].v_tempSens);
     bms_wakeupChain();
 
-    bms_wakeupChain();
-    bms68_setGpo45(0b11);
-    bms_delayMsActive(5);
+//    bms_wakeupChain();
+//    bms68_setGpo45(0b11);
+//    bms_delayMsActive(5);
 
     bms_parseTemps();
     bms_printTemps(ic_ad68[0].temp_cell);
