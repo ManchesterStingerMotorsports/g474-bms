@@ -37,6 +37,7 @@
 #include "bms_libWrapper.h"
 
 #include "uartDMA.h"
+#include "bms_can.h"
 
 /* USER CODE END Includes */
 
@@ -86,7 +87,7 @@ void SystemClock_Config(void);
 uint32_t getRuntimeMs(void);
 uint32_t getRuntimeMsDiff(uint32_t startTime);
 
-static void FDCAN_Config(void); // From ST FDCAN Example
+
 
 /* USER CODE END PFP */
 
@@ -94,7 +95,7 @@ static void FDCAN_Config(void); // From ST FDCAN Example
 /* USER CODE BEGIN 0 */
 
 volatile uint32_t runtime_sec = 0;
-FDCAN_TxHeaderTypeDef TxHeader;
+
 
 /* USER CODE END 0 */
 
@@ -134,6 +135,8 @@ int main(void)
   MX_TIM16_Init();
   MX_FDCAN1_Init();
   MX_FDCAN2_Init();
+  MX_TIM15_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -151,7 +154,7 @@ int main(void)
     HAL_TIM_Base_Start_IT(&htim16);
 
     // Configure FDCAN
-    FDCAN_Config();
+    BMS_CAN_Config();
 
 //    // Initialise BMS configs (No commands sent)
 //    bms_init();
@@ -236,52 +239,42 @@ int main(void)
 //            bms_delayMsActive(50);
 //            bms_openWireCheck();
 
-            HAL_Delay(100);
-            bms_wakeupChain();
-            printfDma("======== C VOLTAGE MEASUREMENT ======== \n");
-            for (int i = 0; i < 3; i++)
-            {
-                bms_readAvgCellVoltage();
-                bms_delayMsActive(50);
-            }
-            printfDma("======================================= \n\n");
-
-
-            bms_wakeupChain();
-            printfDma("Single Shot S Voltage (PWM Interrupted): \n");
-            bms_balancingMeasureVoltage();
-
-
-            printfDma("Temp Measurements: \n");
-            bms_getAuxMeasurement();
-
-//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-//            bms_delayMsActive(12);
-
-            bms_wakeupChain();
-            bms_startBalancing(deltaThreshold);
-            HAL_Delay(500);
-
+//            HAL_Delay(100);
 //            bms_wakeupChain();
-//            bms_readSid();
+//            printfDma("======== C VOLTAGE MEASUREMENT ======== \n");
+//            for (int i = 0; i < 3; i++)
+//            {
+//                bms_readAvgCellVoltage();
+//                bms_delayMsActive(50);
+//            }
+//            printfDma("======================================= \n\n");
+//
+//
+//            bms_wakeupChain();
+//            printfDma("Single Shot S Voltage (PWM Interrupted): \n");
+//            bms_balancingMeasureVoltage();
+//
+//
+//            printfDma("Temp Measurements: \n");
+//            bms_getAuxMeasurement();
+//
+////            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+////            bms_delayMsActive(12);
+//
+//            bms_wakeupChain();
+//            bms_startBalancing(deltaThreshold);
+//            HAL_Delay(500);
+//
+////            bms_wakeupChain();
+////            bms_readSid();
+//
+//            bms_wakeupChain();
+//            bms29_readVB();
+//            bms29_readCurrent();
 
-            bms_wakeupChain();
-            bms29_readVB();
-            bms29_readCurrent();
+            BMS_CAN_Test();
 
-
-            printfDma("Sending CAN \n");
-            uint8_t TxData[2];
-            TxData[0] = 0x06;
-            TxData[1] = 0x09;
-
-            /* Start the Transmission process */
-            if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, TxData) != HAL_OK)
-            {
-              /* Transmission request Error */
-              Error_Handler();
-            }
-
+            HAL_Delay(1000);
 
             timeDiff = getRuntimeMsDiff(timeStart);
             printfDma("Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
@@ -366,52 +359,7 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-static void FDCAN_Config(void)
-{
-//  FDCAN_FilterTypeDef sFilterConfig;
-//
-//  /* Configure Rx filter */
-//  sFilterConfig.IdType = FDCAN_STANDARD_ID;
-//  sFilterConfig.FilterIndex = 0;
-//  sFilterConfig.FilterType = FDCAN_FILTER_MASK;
-//  sFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-//  sFilterConfig.FilterID1 = 0x321;
-//  sFilterConfig.FilterID2 = 0x7FF;
-//  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &sFilterConfig) != HAL_OK)
-//  {
-//    Error_Handler();
-//  }
-//
-//  /* Configure global filter:
-//     Filter all remote frames with STD and EXT ID
-//     Reject non matching frames with STD ID and EXT ID */
-  if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan1, FDCAN_REJECT, FDCAN_REJECT, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK)
-  {
-    Error_Handler();
-  }
 
-  /* Start the FDCAN module */
-  if (HAL_FDCAN_Start(&hfdcan1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-//  if (HAL_FDCAN_ActivateNotification(&hfdcan1, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
-//  {
-//    Error_Handler();
-//  }
-
-  /* Prepare Tx Header */
-  TxHeader.Identifier = 0x069;
-  TxHeader.IdType = FDCAN_STANDARD_ID;
-  TxHeader.TxFrameType = FDCAN_DATA_FRAME;
-  TxHeader.DataLength = FDCAN_DLC_BYTES_2;
-  TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-  TxHeader.BitRateSwitch = FDCAN_BRS_OFF;
-  TxHeader.FDFormat = FDCAN_CLASSIC_CAN;
-  TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
-  TxHeader.MessageMarker = 0;
-}
 
 
 
@@ -419,12 +367,14 @@ static void FDCAN_Config(void)
 // Callback: timer has rolled over
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-  // Check which version of the timer triggered this callback and toggle LED
-  if (htim == &htim16)
-  {
-    runtime_sec += 1;
-  }
+    // Check which version of the timer triggered this callback and toggle LED
+    if (htim == &htim16)
+    {
+        runtime_sec += 1;
+    }
 }
+
+
 
 
 uint32_t getRuntimeMs(void)
