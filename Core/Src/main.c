@@ -227,18 +227,13 @@ int main(void)
 
             timeStart = getRuntimeMs();
 
-//            printfDma("C Voltage: \n");
-//            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-//            bms_delayMsActive(12);
-//            bms_readAvgCellVoltage();
-//            bms_readSVoltage();
-
-//            printfDma("OpenWire Check: \n");
-//            bms_wakeupChain();
-//            bms_delayMsActive(50);
-//            bms_openWireCheck();
-
+            printfDma("C Voltage: \n");
+            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+            bms_delayMsActive(12);
+            bms_readAvgCellVoltage();
+            bms_readSVoltage();
+//
 //            HAL_Delay(100);
 //            bms_wakeupChain();
 //            printfDma("======== C VOLTAGE MEASUREMENT ======== \n");
@@ -248,21 +243,20 @@ int main(void)
 //                bms_delayMsActive(50);
 //            }
 //            printfDma("======================================= \n\n");
-//
-//
-//            bms_wakeupChain();
-//            printfDma("Single Shot S Voltage (PWM Interrupted): \n");
-//            bms_balancingMeasureVoltage();
-//
-//
-//            printfDma("Temp Measurements: \n");
-//            bms_getAuxMeasurement();
-//
+
+            bms_wakeupChain();
+            printfDma("Single Shot S Voltage (PWM Interrupted): \n");
+            bms_balancingMeasureVoltage();
+
+
+            printfDma("Temp Measurements: \n");
+            bms_getAuxMeasurement();
+
 ////            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
 ////            bms_delayMsActive(12);
 //
-//            bms_wakeupChain();
-//            bms_startBalancing(deltaThreshold);
+            bms_wakeupChain();
+            bms_startBalancing(deltaThreshold);
 //            HAL_Delay(500);
 //
 ////            bms_wakeupChain();
@@ -278,17 +272,6 @@ int main(void)
 
             timeDiff = getRuntimeMsDiff(timeStart);
             printfDma("Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
-
-//            // Toggle GPIO
-//            bms_readConfigA();
-//            bms_wakeupChain();
-//            bms68_setGpo45(0b00);
-//            bms_wakeupChain();
-//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-//            bms_wakeupChain();
-//            bms_readConfigA();
-
-//            bmsState = INACTIVE;
 
             break;
 

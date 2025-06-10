@@ -604,21 +604,21 @@ void bms_getAuxMeasurement(void)
     bms_wakeupChain();
 
     // TODO: CHANGE THE NAME ITS 54 SHOULD
-    bms68_setGpo45(0b11);           // Enable 3V3 Converter
-    bms_delayMsActive(25);          // 20ms start-up time based on TEC 2-4810WI datasheet
-
-    bms_transmitCmd((uint8_t *)&ADAX);
-    bms_transmitPoll(PLAUX1);
-    bms_getAuxVoltage(0);
-
-    bms68_setGpo45(0b10);           // Switch to the other Mux Channel
-    bms_delayMsActive(25);           // Small delay for switching
+//    bms68_setGpo45(0b11);           // Enable 3V3 Converter
+//    bms_delayMsActive(25);          // 20ms start-up time based on TEC 2-4810WI datasheet
 
     bms_transmitCmd((uint8_t *)&ADAX);
     bms_transmitPoll(PLAUX1);
     bms_getAuxVoltage(1);
 
-    bms68_setGpo45(0b00);           // Turn off converter
+    bms68_setGpo45(0b00);           // Switch to the other Mux Channel
+    bms_delayMsActive(1);           // Small delay for switching
+
+    bms_transmitCmd((uint8_t *)&ADAX);
+    bms_transmitPoll(PLAUX1);
+    bms_getAuxVoltage(0);
+
+    bms68_setGpo45(0b11);           // Reset to default
 
     bms_parseTemps();
     bms_printVoltage(ic_ad68[0].v_tempSens);
@@ -747,8 +747,8 @@ void bms_startDischarge(float threshold)
     }
 
     // for testing -> enables discharge for cell 1
-//    printfDma("DISCHARGE: IC 1, CELL 1 \n");
-//    ic_ad68[0].pwma.pwm1 = 0b1111;
+    printfDma("DISCHARGE: IC 1, CELL 1 \n");
+    ic_ad68[0].pwma.pwm1 = 0b1111;
 
 
     // The PWM discharge functionality is possible in the standby, REF-UP, extended balancing and in the measure states
