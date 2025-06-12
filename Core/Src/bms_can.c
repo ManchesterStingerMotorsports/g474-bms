@@ -6,9 +6,18 @@
  */
 
 #include "bms_can.h"
+#include "uartDMA.h"
 #include <string.h>
+#include <stdbool.h>
 
 FDCAN_TxHeaderTypeDef TxHeader;
+
+
+#define BUFFER_LEN (7 * 16 + 32)       // TODO: Accurate buffer size
+CanTxMsg txBuffer[BUFFER_LEN];
+volatile uint32_t txBufferHeadIndex = 0;
+volatile uint32_t txBufferTailIndex = 0;
+volatile bool isBufferTransmitting = false;
 
 
 void BMS_CAN_Config(void)
@@ -49,12 +58,28 @@ void BMS_CAN_Config(void)
 
 }
 
-uint32_t id = 0xB000;
+
+void static recursiveTransmit(void)
+{
+    while (HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan1))
+    {
+        if (txBufferTailIndex >= txBufferHeadIndex)
+        {
+            return;
+        }
+
+        CanTxMsg msg = txBuffer[txBufferTailIndex];
+        BMS_CAN_SendMsg(msg);
+
+        txBufferTailIndex++;
+    }
+}
+
 
 void BMS_CAN_Test(void)
 {
     /* Prepare Tx Header */
-    TxHeader.Identifier = id;
+    TxHeader.Identifier = 0xFF;
     TxHeader.IdType = FDCAN_EXTENDED_ID;
     TxHeader.TxFrameType = FDCAN_DATA_FRAME;
     TxHeader.DataLength = 8;
@@ -64,30 +89,37 @@ void BMS_CAN_Test(void)
     TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
     TxHeader.MessageMarker = 0;
 
-    CanTxMsg msg;
-    uint8_t TxData[8] = {0x00, 0x00, 0xDE, 0xAD, 0xBE, 0xEF};
-    static int16_t test_val = 0;
+    const uint32_t TOTAL_MSG_ID = 7 * 16;
+    uint8_t TxData[8] = {0x00, 0x00, 0x00, 0x00, 0xDE, 0xAD, 0xBE, 0xEF};
+    static int16_t test_voltage = 3.7 * 1000;
+    static int16_t test_temp    = 25 * 100;
+    static bool    test_isDicharging = false;
+    static bool    test_isFaultDetected = false;
+
+    test_isDicharging    = !test_isDicharging;
+    test_isFaultDetected = !test_isFaultDetected;
+
+    isBufferTransmitting = false;       // Disable recursive callback in case some are still being sent
 
     /* Start the Transmission process */
-    while (HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan1))
+    for (int i = 0; i < TOTAL_MSG_ID; i++)
     {
-        test_val++;
+        TxData[0] = (uint8_t)(test_voltage & 0xFF);
+        TxData[1] = (uint8_t)((test_voltage >> 8) & 0xFF);
+        TxData[2] = (uint8_t)(test_temp & 0xFF);
+        TxData[3] = (uint8_t)((test_temp >> 8) & 0xFF);
+        TxData[4] = (uint8_t)((test_isDicharging << 0) | (test_isFaultDetected << 1));
 
-        TxData[0] = (uint8_t)(test_val & 0xFF);
-        TxData[1] = (uint8_t)((test_val >> 8) & 0xFF);
-
-        memcpy(msg.data, TxData, sizeof(TxData));
-        TxHeader.Identifier = id;
-        msg.header = TxHeader;
-        BMS_CAN_SendMsg(msg);
-
-        id++;
-        if (id >= 0xB000 + 16*7)
-        {
-            id = 0xB000;
-            return;
-        }
+        memcpy(txBuffer[i].data, TxData, 8);
+        TxHeader.Identifier = BASE_CAN_ID + i;
+        txBuffer[i].header = TxHeader;
     }
+
+    txBufferHeadIndex = TOTAL_MSG_ID;
+    txBufferTailIndex = 0;
+    isBufferTransmitting = true;
+
+    recursiveTransmit();
 }
 
 
@@ -103,28 +135,47 @@ void BMS_CAN_SendMsg(CanTxMsg msg)
 
 
 
+
+
+
 void HAL_FDCAN_TxFifoEmptyCallback(FDCAN_HandleTypeDef *hfdcan)
 {
     if (hfdcan == &hfdcan1)
     {
-//        while (HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan1))
-//        {
-//            uint8_t TxData[8] = {0};
-//            TxData[1] = 'A';
-//            TxData[2] = 'B';
-//            TxData[3] = 'C';
-//            TxData[4] = 'D';
-//            if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, TxData) != HAL_OK)
-//            {
-//                /* Transmission request Error */
-//                Error_Handler();
-//            }
-//        }
-        if (id != 0xB000)
+        if (txBufferTailIndex >= txBufferHeadIndex)
         {
-            BMS_CAN_Test();
+            isBufferTransmitting = false;
+            return;
+        }
+        else
+        {
+            recursiveTransmit();
         }
     }
 }
+
+
+void BMS_CAN_SendBuffer(CanTxMsg* msgArr, uint32_t len)
+{
+    if (len > BUFFER_LEN)
+    {
+        printfDma("Error CANTX: len larger than buffer\n");
+        return;
+    }
+    if (isBufferTransmitting)
+    {
+        printfDma("Error CANTX: previous buffer tx overwritten");
+    }
+
+    isBufferTransmitting = false;       // Disable recursive callback in case some are still being sent
+    memcpy(txBuffer, msgArr, len * sizeof(CanTxMsg));
+    txBufferHeadIndex = len;
+    txBufferTailIndex = 0;
+    isBufferTransmitting = true;
+
+    recursiveTransmit();
+}
+
+
 
 

@@ -10,6 +10,12 @@
 
 #include "main.h"
 
+
+#define INC_BMS_CAN_H_
+
+#define BASE_CAN_ID 0xB000
+
+
 typedef struct
 {
     uint8_t data[8];
@@ -25,6 +31,11 @@ typedef struct
 
 
 void BMS_CAN_Config(void);
+
+void BMS_CAN_SendBuffer(CanTxMsg* msgArr, uint32_t len);
+
+
+
 
 void BMS_CAN_Test(void);
 void BMS_CAN_SendMsg(CanTxMsg msg);

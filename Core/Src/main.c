@@ -233,16 +233,16 @@ int main(void)
             bms_delayMsActive(12);
             bms_readAvgCellVoltage();
             bms_readSVoltage();
-//
-//            HAL_Delay(100);
-//            bms_wakeupChain();
-//            printfDma("======== C VOLTAGE MEASUREMENT ======== \n");
-//            for (int i = 0; i < 3; i++)
-//            {
-//                bms_readAvgCellVoltage();
-//                bms_delayMsActive(50);
-//            }
-//            printfDma("======================================= \n\n");
+
+            HAL_Delay(100);
+            bms_wakeupChain();
+            printfDma("======== C VOLTAGE MEASUREMENT ======== \n");
+            for (int i = 0; i < 3; i++)
+            {
+                bms_readAvgCellVoltage();
+                bms_delayMsActive(50);
+            }
+            printfDma("======================================= \n\n");
 
             bms_wakeupChain();
             printfDma("Single Shot S Voltage (PWM Interrupted): \n");
@@ -255,18 +255,24 @@ int main(void)
 ////            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
 ////            bms_delayMsActive(12);
 //
-            bms_wakeupChain();
-            bms_startBalancing(deltaThreshold);
+//            bms_wakeupChain();
+//            bms_startBalancing(deltaThreshold);
 //            HAL_Delay(500);
 //
 ////            bms_wakeupChain();
 ////            bms_readSid();
 //
-//            bms_wakeupChain();
-//            bms29_readVB();
-//            bms29_readCurrent();
+            bms_wakeupChain();
+            bms29_readVB();
+            bms29_readCurrent();
 
-            BMS_CAN_Test();
+//            BMS_CAN_Test();
+
+            CanTxMsg *msgArr = NULL;
+            uint32_t len = 0;
+            BMS_GetCanData(&msgArr, &len);
+            BMS_CAN_SendBuffer(msgArr, len);
+
 
             HAL_Delay(1000);
 

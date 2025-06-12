@@ -9,6 +9,7 @@
 
 #include "bms_datatypes.h"
 #include "main.h"
+#include "bms_can.h"
 
 
 void bms_init(void);
@@ -52,3 +53,5 @@ void bms_balancingMeasureVoltage(void);
 
 void bms_startBalancing(float deltaThreshold);
 
+
+void BMS_GetCanData(CanTxMsg** buff, uint32_t* len);

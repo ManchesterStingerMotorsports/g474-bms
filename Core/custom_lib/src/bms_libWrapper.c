@@ -49,6 +49,7 @@
 #include <stdio.h>
 #include "main.h"
 #include "uartDMA.h"
+#include "bms_can.h"
 
 
 uint8_t  txData[TOTAL_IC][DATA_LEN];
@@ -56,6 +57,8 @@ uint8_t  rxData[TOTAL_IC][DATA_LEN];
 uint16_t rxPec[TOTAL_IC];
 uint8_t  rxCc[TOTAL_IC];
 
+#define BUFFER_LEN (7 * 16 + 32)       // TODO: Accurate buffer size
+CanTxMsg canTxBuffer[BUFFER_LEN];
 
 typedef struct
 {
@@ -801,6 +804,7 @@ void bms29_readVB(void)
 }
 
 
+uint32_t packCurrent;
 
 void bms29_readCurrent(void)
 {
@@ -822,6 +826,8 @@ void bms29_readCurrent(void)
 
     float current1 = ((float)i1v / 1000000.0f) / SHUNT_RESISTANCE;
     float current2 = ((float)i2v / 1000000.0f) / SHUNT_RESISTANCE;
+
+    packCurrent = (current1 + current2) * 1000 / 2;
 
     printfDma("Current: %fA, %fA  \n\n", current1 , current2);
 }
@@ -855,6 +861,78 @@ void bms_startBalancing(float deltaThreshold)
     {
         bms_startDischarge(dischargeThreshold);
     }
+}
+
+
+
+void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
+{
+    *len = 0;
+    uint32_t id = BASE_CAN_ID;
+    FDCAN_TxHeaderTypeDef txHeader;
+
+    /* Prepare Tx Header */
+    txHeader.Identifier = id;
+
+    txHeader.IdType = FDCAN_EXTENDED_ID;
+    txHeader.TxFrameType = FDCAN_DATA_FRAME;
+    txHeader.DataLength = 8;
+    txHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+    txHeader.BitRateSwitch = FDCAN_BRS_OFF;
+    txHeader.FDFormat = FDCAN_CLASSIC_CAN;
+    txHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+    txHeader.MessageMarker = 0;
+
+    int16_t cellVoltage = 0;
+    int16_t cellTemp = 0;
+    uint8_t txData[8] = {0};
+    uint8_t isDischarging = false;
+    uint8_t isFaultDetected = false;
+    int32_t packVoltage = 0;
+
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        for (int c = 0; c < TOTAL_CELL; c++)
+        {
+            cellVoltage = (int16_t)(ic_ad68[ic].v_sCell[c] * 1000);
+            cellTemp    = (int16_t)(ic_ad68[ic].temp_cell[c] * 100);
+            isDischarging = ((ic_ad68[ic].isDischarging >> 1U) & 0x01);
+
+            packVoltage += (cellVoltage * 1000);
+
+            txData[0] = (uint8_t)(cellVoltage & 0xFF);
+            txData[1] = (uint8_t)((cellVoltage >> 8) & 0xFF);
+            txData[2] = (uint8_t)(cellTemp & 0xFF);
+            txData[3] = (uint8_t)((cellTemp >> 8) & 0xFF);
+            txData[4] = (uint8_t)((isDischarging << 0) | (isFaultDetected << 1));
+
+            uint32_t id_offset = ic*TOTAL_CELL + c;
+
+            memcpy(canTxBuffer[id_offset].data, txData, 8);
+            txHeader.Identifier = id + id_offset;
+            canTxBuffer[id_offset].header = txHeader;
+
+            *len += 1;
+        }
+    }
+
+    uint32_t packOffset = TOTAL_AD68*TOTAL_CELL;
+
+    canTxBuffer[packOffset].data[0] = (packVoltage >> 0)  & 0xFF;
+    canTxBuffer[packOffset].data[1] = (packVoltage >> 8)  & 0xFF;
+    canTxBuffer[packOffset].data[2] = (packVoltage >> 16) & 0xFF;
+    canTxBuffer[packOffset].data[3] = (packVoltage >> 24) & 0xFF;
+
+    canTxBuffer[packOffset].data[4] = (packCurrent >> 0)  & 0xFF;
+    canTxBuffer[packOffset].data[5] = (packCurrent >> 8)  & 0xFF;
+    canTxBuffer[packOffset].data[6] = (packCurrent >> 16) & 0xFF;
+    canTxBuffer[packOffset].data[7] = (packCurrent >> 24) & 0xFF;
+
+    txHeader.Identifier = BASE_CAN_ID + 7*TOTAL_CELL;
+    canTxBuffer[packOffset].header = txHeader;
+
+    *len += 1;
+    *buff = canTxBuffer;
 }
 
 
