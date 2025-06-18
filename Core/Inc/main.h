@@ -55,7 +55,7 @@ extern FDCAN_HandleTypeDef hfdcan2;
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-#define TOTAL_IC        8
+#define TOTAL_IC        2
 #define TOTAL_CELL      16
 #define TOTAL_AD68      (TOTAL_IC - 1)
 

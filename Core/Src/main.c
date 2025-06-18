@@ -225,6 +225,10 @@ int main(void)
         {
         case ACTIVE:
 
+//            BMS_LoopActive();
+//            BMS_LoopCharging();
+//            BMS_LoopIDLE();
+
             timeStart = getRuntimeMs();
 
             printfDma("C Voltage: \n");
@@ -237,7 +241,7 @@ int main(void)
             HAL_Delay(100);
             bms_wakeupChain();
             printfDma("======== C VOLTAGE MEASUREMENT ======== \n");
-            for (int i = 0; i < 3; i++)
+            for (int i = 0; i < 1; i++)
             {
                 bms_readAvgCellVoltage();
                 bms_delayMsActive(50);

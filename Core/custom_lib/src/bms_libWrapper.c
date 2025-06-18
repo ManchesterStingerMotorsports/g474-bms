@@ -935,5 +935,20 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
     *buff = canTxBuffer;
 }
 
+uint8_t BMS_LoopActive(void)
+{
+
+}
+
+uint8_t BMS_LoopCharging(void)
+{
+
+}
+
+uint8_t BMS_LoopIDLE(void)
+{
+
+}
+
 
 
