@@ -55,9 +55,10 @@ extern FDCAN_HandleTypeDef hfdcan2;
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-#define TOTAL_IC        2
 #define TOTAL_CELL      16
-#define TOTAL_AD68      (TOTAL_IC - 1)
+#define TOTAL_AD68      1
+#define TOTAL_AD29      1
+#define TOTAL_IC        (TOTAL_AD29 + TOTAL_AD68)
 
 #define BIT_SET(byte,nbit)   ((byte) |=  (UINT32_C(1) << (nbit)))
 #define BIT_CLEAR(byte,nbit) ((byte) &= ~(UINT32_C(1) << (nbit)))

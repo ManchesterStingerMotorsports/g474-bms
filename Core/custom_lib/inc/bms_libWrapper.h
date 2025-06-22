@@ -56,8 +56,8 @@ void bms_startBalancing(float deltaThreshold);
 
 void BMS_GetCanData(CanTxMsg** buff, uint32_t* len);
 
-uint8_t BMS_LoopActive(void);
-uint8_t BMS_LoopCharging(void);
-uint8_t BMS_LoopIDLE(void);
+uint32_t BMS_LoopActive(void);
+uint32_t BMS_LoopCharging(void);
+uint32_t BMS_LoopIDLE(void);
 
 

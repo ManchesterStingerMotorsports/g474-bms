@@ -57,8 +57,21 @@ uint8_t  rxData[TOTAL_IC][DATA_LEN];
 uint16_t rxPec[TOTAL_IC];
 uint8_t  rxCc[TOTAL_IC];
 
-#define BUFFER_LEN (7 * 16 + 32)       // TODO: Accurate buffer size
-CanTxMsg canTxBuffer[BUFFER_LEN];
+uint32_t errorCount = 0;
+uint32_t errorCount_Alltime = 0;
+
+
+#define CAN_BUFFER_LEN (7 * 16 + 32)       // TODO: Accurate buffer size
+CanTxMsg canTxBuffer[CAN_BUFFER_LEN];
+
+
+typedef enum
+{
+    VOLTAGE_S,
+    VOLTAGE_C,
+    VOLTAGE_TEMP,
+} VoltageTypes;
+
 
 typedef struct
 {
@@ -66,7 +79,13 @@ typedef struct
     ad29_cfa_t cfa_Rx;
     ad29_cfb_t cfb_Tx;
     ad29_cfb_t cfb_Rx;
-} ic_ad29_t;
+
+    float current1;
+    float current2;
+    float vb1;
+    float vb2;
+
+} Ic_ad29;
 
 
 typedef struct
@@ -94,12 +113,14 @@ typedef struct
     float temp_cell[16];
     float temp_ic;
 
-    uint16_t isDischarging;     // isDischarging Flag
-} ic_ad68_t;
+    uint16_t isDischarging;         // isDischarging Flag
+    uint16_t isCellFaultDetected;
+    bool isCommsError;
+} Ic_ad68;
 
 
-ic_ad29_t ic_ad29;
-ic_ad68_t ic_ad68[TOTAL_AD68];
+Ic_ad29 ic_ad29;
+Ic_ad68 ic_ad68[TOTAL_AD68];
 
 
 
@@ -237,6 +258,32 @@ void bms_printRawData(uint8_t data[TOTAL_IC][DATA_LEN], uint8_t cc[TOTAL_IC])
 }
 
 
+//void bms_pecErrorHandler(uint8_t err)
+//{
+//    if (err == 0)
+//    {
+//       return;
+//    }
+//    printfDma("WARNING! PEC ERROR - IC: %d", err);
+//    errorCount++;
+//    errorCount_Alltime++;
+//
+//    if (errorCount >= 3)
+//    {
+//        bms_resetSequnce();
+//    }
+//    else
+//    {
+//        bms_retryComms();
+//    }
+//}
+//
+//uint8_t bms_checkComms(void)
+//{
+//    bms_softReset();
+//    bms_readSid();
+//}
+
 bool bms_checkRxFault(uint8_t data[TOTAL_IC][DATA_LEN], uint16_t pec[TOTAL_IC], uint8_t cc[TOTAL_IC])
 {
     bool faultDetected = false;
@@ -267,27 +314,33 @@ bool bms_checkRxFault(uint8_t data[TOTAL_IC][DATA_LEN], uint16_t pec[TOTAL_IC], 
 void bms_readSid(void)
 {
     bms_receiveData(RDSID, rxData, rxPec, rxCc);
-    printfDma("SID: \n");
-    bms_checkRxFault(rxData, rxPec, rxCc);
-    bms_printRawData(rxData, rxCc);
+    if (bms_checkRxFault(rxData, rxPec, rxCc))
+    {
+        printfDma("SID: \n");
+        bms_printRawData(rxData, rxCc);
+    }
 }
 
 
 void bms_readConfigA(void)
 {
     bms_receiveData(RDCFGA, rxData, rxPec, rxCc);
-    printfDma("CFGA: \n");
-    bms_checkRxFault(rxData, rxPec, rxCc);
-    bms_printRawData(rxData, rxCc);
+    if (bms_checkRxFault(rxData, rxPec, rxCc))
+    {
+        printfDma("CFGA: \n");
+        bms_printRawData(rxData, rxCc);
+    }
 }
 
 
 void bms_readConfigB(void)
 {
     bms_receiveData(RDCFGB, rxData, rxPec, rxCc);
-    printfDma("CFGB: \n");
-    bms_checkRxFault(rxData, rxPec, rxCc);
-    bms_printRawData(rxData, rxCc);
+    if (bms_checkRxFault(rxData, rxPec, rxCc))
+    {
+        printfDma("CFGB: \n");
+        bms_printRawData(rxData, rxCc);
+    }
 }
 
 
@@ -319,7 +372,7 @@ void bms_parseVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_CELL
     {
         for (int c = cell_index*3; c < (cell_index*3 + 3); c++)
         {
-            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(ic_ad68_t)) + c) = *((int16_t *)(rawData[ic] + (c-cell_index*3)*2)) * 0.00015 + 1.5;
+            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(Ic_ad68)) + c) = *((int16_t *)(rawData[ic] + (c-cell_index*3)*2)) * 0.00015 + 1.5;
 //            vArr[ic-1][c] = *((int16_t *)(rawData[ic] + (c-cell_index*3)*2)) * 0.00015 + 1.5;
 
             if (cell_index == 5)
@@ -353,8 +406,8 @@ void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_C
                 ci -= 2;
             }
 
-            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(ic_ad68_t)) + (ci * 2 + muxIndex)) = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
-//            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(ic_ad68_t)) + (ci + (8*muxIndex))) = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
+            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(Ic_ad68)) + (ci * 2 + muxIndex)) = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
+//            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(Ic_ad68)) + (ci + (8*muxIndex))) = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
 //            vArr[ic-1][ci + 8*muxIndex] = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
 
             if (cell_index == 3)
@@ -412,7 +465,7 @@ void bms_printVoltage(float vArr[16])
         printfDma("| %2d |", ic);
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-            printfDma("%8.5f|", *((float*)((uint8_t*)vArr + ic * sizeof(ic_ad68_t)) + c));
+            printfDma("%8.5f|", *((float*)((uint8_t*)vArr + ic * sizeof(Ic_ad68)) + c));
         }
 
         printfDma("%8.5f|", ic_ad68[ic].v_avgCell_sum);
@@ -437,7 +490,7 @@ void bms_printTemps(float tArr[16])
         for (int c = 0; c < TOTAL_CELL; c++)
         {
 //            printfDma("%6.1f |", tArr[ic][c]);
-            printfDma("%6.1f |", *((float*)((uint8_t*)tArr + ic * sizeof(ic_ad68_t)) + c));
+            printfDma("%6.1f |", *((float*)((uint8_t*)tArr + ic * sizeof(Ic_ad68)) + c));
 
         }
         printfDma("\n");
@@ -504,46 +557,6 @@ void bms_getAuxVoltage(uint8_t muxIndex)
         }
         bms_parseAuxVoltage(rxData, ic_ad68[0].v_tempSens, i, muxIndex);
     }
-}
-
-
-void bms_openWireCheck(void)
-{
-    ADSV.CONT = 1;      // Continuous
-    ADSV.DCP  = 0;      // Discharge permitted
-
-    bms_startTimer();
-
-    ADSV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
-    bms_transmitCmd((uint8_t *)&ADSV);
-//    bms_transmitPoll(PLSADC);
-    bms_delayMsActive(16);
-    bms_readSVoltage();
-    bms_printVoltage(ic_ad68[0].v_sCell);
-
-    // S and C is compared
-
-    ADSV.CONT = 0;      // Continuous
-    ADSV.DCP  = 0;      // Discharge permitted
-
-    bms_wakeupChain();
-    ADSV.OW   = 0b10;   // Open wire on C-ADCS and S-ADCs
-    bms_transmitPoll((uint8_t *)&ADSV);
-//    bms_transmitPoll(PLSADC);
-    bms_readSVoltage();
-    bms_printVoltage(ic_ad68[0].v_sCell);
-
-    bms_wakeupChain();
-    ADSV.OW   = 0b01;   // Open wire on C-ADCS and S-ADCs
-    bms_transmitPoll((uint8_t *)&ADSV);
-//    bms_transmitPoll(PLSADC);
-    bms_readSVoltage();
-    bms_printVoltage(ic_ad68[0].v_sCell);
-
-    uint32_t time = bms_getTimCount();
-    bms_stopTimer();
-
-    printfDma("PT: %ld us\n", time);
 }
 
 
@@ -636,7 +649,7 @@ void bms_getAuxMeasurement(void)
 }
 
 
-void bms_setPwm(ic_ad68_t *ic, uint8_t cell, uint8_t dutyCycle)
+void bms_setPwm(Ic_ad68 *ic, uint8_t cell, uint8_t dutyCycle)
 {
 //    const uint8_t dutyCycle = 0b0111;
     cell++;                                 // Change from 0 indexing to 1 indexing
@@ -798,13 +811,12 @@ void bms29_readVB(void)
     bms_receiveData(RDVB, rxData, rxPec, rxCc);
     bms_checkRxFault(rxData, rxPec, rxCc);
 //    bms_printRawData(rxData, rxCc);
-    float vb1 = *((int16_t *)(rxData[0] + 2)) *  0.000100 * 396.604395604;
-    float vb2 = *((int16_t *)(rxData[0] + 4)) * -0.000085 * 751;
-    printfDma("VB: %fV, %fV  \n\n", vb1, vb2);
+    ic_ad29.vb1 = *((int16_t *)(rxData[0] + 2)) *  0.000100 * 396.604395604;
+    ic_ad29.vb2 = *((int16_t *)(rxData[0] + 4)) * -0.000085 * 751;
+    printfDma("VB: %fV, %fV  \n\n", ic_ad29.vb1, ic_ad29.vb2);
 }
 
 
-uint32_t packCurrent;
 
 void bms29_readCurrent(void)
 {
@@ -824,12 +836,10 @@ void bms29_readCurrent(void)
 
     const float SHUNT_RESISTANCE = 0.000050; // 50 microOhms
 
-    float current1 = ((float)i1v / 1000000.0f) / SHUNT_RESISTANCE;
-    float current2 = ((float)i2v / 1000000.0f) / SHUNT_RESISTANCE;
+    ic_ad29.current1 = ((float)i1v / 1000000.0f) / SHUNT_RESISTANCE;
+    ic_ad29.current2 = ((float)i2v / 1000000.0f) / SHUNT_RESISTANCE;
 
-    packCurrent = (current1 + current2) * 1000 / 2;
-
-    printfDma("Current: %fA, %fA  \n\n", current1 , current2);
+    printfDma("Current: %fA, %fA  \n\n", ic_ad29.current1 , ic_ad29.current2);
 }
 
 
@@ -889,6 +899,7 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
     uint8_t isDischarging = false;
     uint8_t isFaultDetected = false;
     int32_t packVoltage = 0;
+    uint32_t packCurrent = (ic_ad29.current1 + ic_ad29.current2) * 1000 / 2;
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
@@ -935,19 +946,19 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
     *buff = canTxBuffer;
 }
 
-uint8_t BMS_LoopActive(void)
+uint32_t BMS_LoopActive(void)
 {
-
+    return 0;
 }
 
-uint8_t BMS_LoopCharging(void)
+uint32_t BMS_LoopCharging(void)
 {
-
+    return 0;
 }
 
-uint8_t BMS_LoopIDLE(void)
+uint32_t BMS_LoopIDLE(void)
 {
-
+    return 0;
 }
 
 

@@ -175,59 +175,47 @@ void static bms_spiReceiveData(uint8_t rxData[TOTAL_IC][DATA_LEN], uint16_t rxPe
 }
 
 
-uint8_t static checkRxPec(uint8_t rxData[TOTAL_IC][DATA_LEN], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC])
+bool bms_checkRxPec(uint8_t rxData[TOTAL_IC][DATA_LEN], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC], bool errorIndex[TOTAL_IC])
 {
+    bool pecOK = true;
+
     for (int ic = 0; ic < TOTAL_IC; ic++)
     {
         uint16_t calculated_pec = bms_calcPec10(rxData[ic], DATA_LEN, rxCc + ic);
 
+        errorIndex[ic] = true;                          // True == PEC OK
         if (calculated_pec != rxPec[ic])
         {
-            return 1 + ic;
+            errorIndex[ic] = false;                     // Store the error location
+            pecOK = false;                              // Return False to indicate PEC Error
         }
-
-//        errorIndex[ic] = true;                          // True == PEC OK
-//        if (calculated_pec != rxPec[ic])
-//        {
-//            errorIndex[ic] = false;                     // Store the error location
-//            status = 0;                                 // Return False to indicate PEC Error
-//        }
     }
-
-    return 0; // OK
+    return pecOK;
 }
 
 
-void static incrementCC(uint8_t* txCC)
-{
-    if (*txCC >= 63)
-    {
-        *txCC = 1;
-    }
-    else
-    {
-        (*txCC)++;
-    }
-}
+//void static incrementCC(uint8_t* txCC)
+//{
+//    if (*txCC >= 63)
+//    {
+//        *txCC = 1;
+//    }
+//    else
+//    {
+//        (*txCC)++;
+//    }
+//}
 
 
-uint8_t static checkRxCc(uint8_t* txCc, uint8_t* rxCc)
-{
-    return (*rxCc - *txCc);
-}
-
-
-
-void bms_transmitCmd(uint8_t cmd[CMD_LEN], uint8_t* txCc)
+void bms_transmitCmd(uint8_t cmd[CMD_LEN])
 {
     bms_csLow();
     bms_spiTransmitCmd(cmd);
-    incrementCC(txCc);
     bms_csHigh();
 }
 
 
-void bms_transmitPoll(uint8_t cmd[CMD_LEN], uint8_t* txCc)
+void bms_transmitPoll(uint8_t cmd[CMD_LEN])
 {
     bms_csLow();
     bms_spiTransmitCmd(cmd);
@@ -243,29 +231,29 @@ void bms_transmitPoll(uint8_t cmd[CMD_LEN], uint8_t* txCc)
 }
 
 
-void bms_transmitData(uint8_t cmd[CMD_LEN], uint8_t* txCc, uint8_t txBuffer[TOTAL_IC][DATA_LEN])
+void bms_transmitData(uint8_t cmd[CMD_LEN], uint8_t txBuffer[TOTAL_IC][DATA_LEN])
 {
     bms_csLow();
-    incrementCC(txCc);
     bms_spiTransmitCmd(cmd);
     bms_spiTransmitData(txBuffer);
     bms_csHigh();
 }
 
 
-uint8_t bms_receiveData(uint8_t cmd[CMD_LEN], uint8_t* txCc, uint8_t rxBuffer[TOTAL_IC][DATA_LEN], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC])
+void bms_receiveData(uint8_t cmd[CMD_LEN], uint8_t rxBuffer[TOTAL_IC][DATA_LEN], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC])
 {
     bms_csLow();
     bms_spiTransmitCmd(cmd);
     bms_spiReceiveData(rxBuffer, rxPec, rxCc);
     bms_csHigh();
-
-    uint8_t status;
-    status = checkRxPec(rxBuffer, rxPec, rxCc);
-    if (status) return (status);
-    status = checkRxCc(txCc, rxCc);
-    if (status) return -1;
 }
+
+
+uint8_t bms_checkCc(uint8_t* txCc, uint8_t* rxCc)
+{
+    return (*txCc - *rxCc); /// WIP
+}
+
 
 
 
