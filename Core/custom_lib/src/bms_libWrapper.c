@@ -60,17 +60,10 @@ uint8_t  rxCc[TOTAL_IC];
 uint32_t errorCount = 0;
 uint32_t errorCount_Alltime = 0;
 
+VoltageTypes dischargeVoltageType = VOLTAGE_S;
 
 #define CAN_BUFFER_LEN (7 * 16 + 32)       // TODO: Accurate buffer size
 CanTxMsg canTxBuffer[CAN_BUFFER_LEN];
-
-
-typedef enum
-{
-    VOLTAGE_S,
-    VOLTAGE_C,
-    VOLTAGE_TEMP,
-} VoltageTypes;
 
 
 typedef struct
@@ -90,37 +83,40 @@ typedef struct
 
 typedef struct
 {
-    ad68_cfa_t cfa_Tx;
-    ad68_cfa_t cfa_Rx;
-    ad68_cfb_t cfb_Tx;
-    ad68_cfb_t cfb_Rx;
+    // From/For Config Registers
+    ad68_cfa_t cfa_Tx   [TOTAL_AD68];
+    ad68_cfa_t cfa_Rx   [TOTAL_AD68];
+    ad68_cfb_t cfb_Tx   [TOTAL_AD68];
+    ad68_cfb_t cfb_Rx   [TOTAL_AD68];
 
-    ad68_pwma_t pwma;
-    ad68_pwmb_t pwmb;
+    ad68_pwma_t pwma    [TOTAL_AD68];
+    ad68_pwmb_t pwmb    [TOTAL_AD68];
 
-    float v_avgCell[16];        // Average of 8 samples register (C-ADC)
-    float v_avgCell_sum;
-    float v_avgCell_avg;
-    float v_avgCell_min;
-    float v_avgCell_max;
-    float v_avgCell_delta;
+    // From Read Registers
+    float v_cell        [TOTAL_VOLTAGE_TYPES][TOTAL_AD68][TOTAL_CELL];        // Average of 8 samples register (C-ADC)
+    // Calculated Values
+    float v_cell_diff[TOTAL_VOLTAGE_TYPES][TOTAL_AD68][TOTAL_CELL];
+    float v_cell_sum    [TOTAL_VOLTAGE_TYPES][TOTAL_AD68];
+    float v_cell_avg    [TOTAL_VOLTAGE_TYPES][TOTAL_AD68];
+    float v_cell_min    [TOTAL_VOLTAGE_TYPES][TOTAL_AD68];
+    float v_cell_max    [TOTAL_VOLTAGE_TYPES][TOTAL_AD68];
+    float v_cell_delta  [TOTAL_VOLTAGE_TYPES][TOTAL_AD68];
 
-    float v_sCell[16];          // Reduntant (S-ADC) Value
+    // From AUX measurement
+    float v_segment     [TOTAL_AD68];
+    float temp_cell     [TOTAL_AD68][TOTAL_CELL];
+    float temp_ic       [TOTAL_AD68];
 
-    float v_tempSens[16];
-    float v_segment;
+    // flag stored in bits
+    uint16_t isDischarging          [TOTAL_AD68];         // isDischarging Flag
+    uint16_t isCellFaultDetected    [TOTAL_AD68];
+    bool isCommsError               [TOTAL_AD68];
 
-    float temp_cell[16];
-    float temp_ic;
-
-    uint16_t isDischarging;         // isDischarging Flag
-    uint16_t isCellFaultDetected;
-    bool isCommsError;
 } Ic_ad68;
 
 
 Ic_ad29 ic_ad29;
-Ic_ad68 ic_ad68[TOTAL_AD68];
+Ic_ad68 ic_ad68;
 
 
 
@@ -143,8 +139,8 @@ void bms_resetConfig(void)
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
-        memcpy(&ic_ad68[ic].cfa_Tx, &ad68_cfaDefault, DATA_LEN);
-        memcpy(&ic_ad68[ic].cfb_Tx, &ad68_cfbDefault, DATA_LEN);
+        memcpy(&ic_ad68.cfa_Tx[ic], &ad68_cfaDefault, DATA_LEN);
+        memcpy(&ic_ad68.cfb_Tx[ic], &ad68_cfbDefault, DATA_LEN);
     }
 
     ad68_cfa_t ad68_cfaT;
@@ -160,7 +156,7 @@ void bms_writeConfigA(void)
     // Fill buffer with the other ad6830 data
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
-        memcpy(txData[ic+1], &ic_ad68[ic].cfa_Tx, DATA_LEN);
+        memcpy(txData[ic+1], &ic_ad68.cfa_Tx[ic], DATA_LEN);
     }
 
     // write config A
@@ -176,7 +172,7 @@ void bms_writeConfigB(void)
     // Fill buffer with the other ad6830 data
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
-        memcpy(txData[ic+1], &ic_ad68[ic].cfb_Tx, DATA_LEN);
+        memcpy(txData[ic+1], &ic_ad68.cfb_Tx[ic], DATA_LEN);
     }
 
     // write config B
@@ -192,7 +188,7 @@ void bms_writePwmA(void)
     // Fill buffer with the other ad6830 data
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
-        memcpy(txData[ic+1], &ic_ad68[ic].pwma, DATA_LEN);
+        memcpy(txData[ic+1], &ic_ad68.pwma[ic], DATA_LEN);
     }
 
     // write config A
@@ -208,7 +204,7 @@ void bms_writePwmB(void)
     // Fill buffer with the other ad6830 data
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
-        memcpy(txData[ic+1], &ic_ad68[ic].pwmb, DATA_LEN);
+        memcpy(txData[ic+1], &ic_ad68.pwmb[ic], DATA_LEN);
     }
 
     // write config B
@@ -222,8 +218,8 @@ void bms_init(void)
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
-        ic_ad68[ic].cfa_Tx.refon = 0b1;
-        ic_ad68[ic].cfa_Tx.fc = 0b001;    // 110 Hz corner freq
+        ic_ad68.cfa_Tx[ic].refon = 0b1;
+        ic_ad68.cfa_Tx[ic].fc = 0b001;    // 110 Hz corner freq
     }
 
     bms_writeConfigA();
@@ -236,7 +232,7 @@ void bms68_setGpo45(uint8_t twoBitIndex)
     // Only for pin 4 and 5
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
-        ic_ad68[ic].cfa_Tx.gpo1to8 = ((twoBitIndex) << 3) | (0xFF ^ (0x3 << 3));
+        ic_ad68.cfa_Tx[ic].gpo1to8 = ((twoBitIndex) << 3) | (0xFF ^ (0x3 << 3));
     }
 
     bms_writeConfigA();
@@ -365,15 +361,16 @@ void bms_startAdcvCont(void)
 }
 
 
-void bms_parseVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_CELL], uint8_t cell_index)
+void bms_parseVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_IC][TOTAL_CELL], uint8_t register_index)
 {
     // Does not take care of 2950
     for (int ic = 1; ic < TOTAL_IC; ic++)
     {
-        for (int c = cell_index*3; c < (cell_index*3 + 3); c++)
+        uint8_t cell_index = (register_index * 3);
+
+        for (int c = cell_index; c < (cell_index + 3); c++)
         {
-            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(Ic_ad68)) + c) = *((int16_t *)(rawData[ic] + (c-cell_index*3)*2)) * 0.00015 + 1.5;
-//            vArr[ic-1][c] = *((int16_t *)(rawData[ic] + (c-cell_index*3)*2)) * 0.00015 + 1.5;
+            vArr[ic-1][c] = *((int16_t *)(rawData[ic] + (c - cell_index)*2)) * 0.00015 + 1.5;
 
             if (cell_index == 5)
             {
@@ -384,14 +381,14 @@ void bms_parseVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_CELL
 }
 
 
-void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_CELL], uint8_t cell_index, uint8_t muxIndex)
+void bms_parseAuxVoltage(uint8_t const rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_AD68][TOTAL_CELL], uint8_t cell_index, uint8_t muxIndex)
 {
     // Does not take care of 2950
     for (int ic = 1; ic < TOTAL_IC; ic++)
     {
         if (cell_index == 4)
         {
-            ic_ad68[ic-1].temp_ic = (*((int16_t *)(rawData[ic] + 2)) * 0.00015 + 1.5) / 0.0075 - 273;
+            ic_ad68.temp_ic[ic-1] = (*((int16_t *)(rawData[ic] + 2)) * 0.00015 + 1.5) / 0.0075 - 273;
             continue;
         }
 
@@ -406,13 +403,11 @@ void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_C
                 ci -= 2;
             }
 
-            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(Ic_ad68)) + (ci * 2 + muxIndex)) = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
-//            *((float*)((uint8_t*)vArr + (ic-1) * sizeof(Ic_ad68)) + (ci + (8*muxIndex))) = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
-//            vArr[ic-1][ci + 8*muxIndex] = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
+            vArr[ic-1][ci + 8*muxIndex] = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
 
             if (cell_index == 3)
             {
-                ic_ad68[ic-1].v_segment = (*((int16_t *)(rawData[ic] + 4)) * 0.00015 + 1.5) * 25;
+                ic_ad68.v_segment[ic-1] = (*((int16_t *)(rawData[ic] + 4)) * 0.00015 + 1.5) * 25;
                 break;
             }
         }
@@ -420,7 +415,7 @@ void bms_parseAuxVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_C
 }
 
 
-void bms_calculateStats(void)
+void bms_calculateStats(VoltageTypes voltageType)
 {
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
@@ -430,7 +425,7 @@ void bms_calculateStats(void)
 
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-            float voltage = ic_ad68[ic].v_avgCell[c];
+            float voltage = ic_ad68.v_cell[voltageType][ic][c];
             sum += voltage;
             if (voltage > max)
             {
@@ -441,18 +436,49 @@ void bms_calculateStats(void)
                 min = voltage;
             }
         }
-        ic_ad68[ic].v_avgCell_min   = min;
-        ic_ad68[ic].v_avgCell_max   = max;
-        ic_ad68[ic].v_avgCell_sum   = sum;
-        ic_ad68[ic].v_avgCell_avg   = sum / 16.0;
-        ic_ad68[ic].v_avgCell_delta = max - min;
 
+        ic_ad68.v_cell_min  [voltageType][ic] = min;
+        ic_ad68.v_cell_max  [voltageType][ic] = max;
+        ic_ad68.v_cell_sum  [voltageType][ic] = sum;
+        ic_ad68.v_cell_avg  [voltageType][ic] = sum / 16.0;
+        ic_ad68.v_cell_delta[voltageType][ic] = max - min;
+
+        for (int c = 0; c < TOTAL_CELL; c++)
+        {
+            ic_ad68.v_cell_diff[voltageType][ic][c] = ic_ad68.v_cell[voltageType][ic][c] - min;
+        }
     }
 }
 
 
-void bms_printVoltage(float vArr[16])
+void bms_printVoltage(VoltageTypes voltageType)
 {
+    float (*vArr)[TOTAL_CELL] = ic_ad68.v_cell[voltageType];
+    float (*vDev)[TOTAL_CELL] = ic_ad68.v_cell_diff[voltageType];
+
+    char* title;
+    switch (voltageType)
+    {
+    case VOLTAGE_C:
+        title = "C Voltage";
+        break;
+    case VOLTAGE_C_AVG:
+        title = "C Average Voltage";
+        break;
+    case VOLTAGE_C_FIL:
+        title = "C Filtered Voltage";
+        break;
+    case VOLTAGE_S:
+        title = "S Voltage";
+        break;
+    case VOLTAGE_TEMP:
+        title = "Temperature Sensors Voltage";
+        break;
+    default:
+        break;
+    }
+    printfDma("%s: \n", title);
+
     printfDma("| IC |");
     for (int i = 0; i < TOTAL_CELL; i++)
     {
@@ -462,26 +488,37 @@ void bms_printVoltage(float vArr[16])
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
-        printfDma("| %2d |", ic);
+        uint8_t paddingOffset;
+        paddingOffset = printfDma("| %2d |", ic);
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-            printfDma("%8.5f|", *((float*)((uint8_t*)vArr + ic * sizeof(Ic_ad68)) + c));
+            printfDma("%8.5f|", vArr[ic][c]);
         }
 
-        printfDma("%8.5f|", ic_ad68[ic].v_avgCell_sum);
-        printfDma("%8.5f|", ic_ad68[ic].v_avgCell_delta);
+        printfDma("%8.5f|", ic_ad68.v_cell_sum  [voltageType][ic]);
+        printfDma("%8.5f|", ic_ad68.v_cell_delta[voltageType][ic]);
+        printfDma("\n");
+
+        printfDma("%*s", paddingOffset, "");
+        for (int c = 0; c < TOTAL_CELL; c++)
+        {
+            printfDma("%8.5f|", vDev[ic][c]);
+        }
         printfDma("\n");
     }
 }
 
 
-void bms_printTemps(float tArr[16])
+void bms_printTemps(void)
 {
+    float (*tArr)[TOTAL_CELL] = ic_ad68.temp_cell;
+
     printfDma("| IC |");
     for (int i = 0; i < TOTAL_CELL; i++)
     {
         printfDma("  %2d   |", i+1);
     }
+    printfDma("  Die Temp / Segment Voltage");
     printfDma("\n");
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
@@ -489,22 +526,24 @@ void bms_printTemps(float tArr[16])
         printfDma("| %2d |", ic);
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-//            printfDma("%6.1f |", tArr[ic][c]);
-            printfDma("%6.1f |", *((float*)((uint8_t*)tArr + ic * sizeof(Ic_ad68)) + c));
-
+            printfDma("%6.1f |", tArr[ic][c]);
         }
-        printfDma("\n");
+        printfDma("  %.2f C  /  %.2f V \n", ic_ad68.temp_ic[ic], ic_ad68.v_segment[ic]);
     }
 }
 
 
-// TODO: different options of read commands
+uint8_t* readCellVoltageCmdList[TOTAL_VOLTAGE_TYPES][6] = {
+        {RDCVA, RDCVB, RDCVC, RDCVD, RDCVE, RDCVF}, // VOLTAGE_TEMP
+        {RDACA, RDACB, RDACC, RDACD, RDACE, RDACF}, // VOLTAGE_C_AVG
+        {RDFCA, RDFCB, RDFCC, RDFCD, RDFCE, RDFCF}, // VOLTAGE_FIL
+        {RDSVA, RDSVB, RDSVC, RDSVD, RDSVE, RDSVF}, // VOLTAGE_S
+        {} // VOLTAGE_TEMP
+};
 
-void bms_readAvgCellVoltage(void)
+void bms_readCellVoltage(VoltageTypes voltageType)
 {
-//    uint8_t* cmdList[] = {RDACA, RDACB, RDACC, RDACD, RDACE, RDACF};
-    uint8_t* cmdList[] = {RDFCA, RDFCB, RDFCC, RDFCD, RDFCE, RDFCF}; // TODO: Temporary change command to read from filter register instead
-//    float  vBuffer[TOTAL_AD68][TOTAL_CELL];
+    uint8_t** cmdList = readCellVoltageCmdList[voltageType];
 
     for (int i = 0; i < 6; i++)
     {
@@ -513,34 +552,11 @@ void bms_readAvgCellVoltage(void)
         {
             return;
         }
-        bms_parseVoltage(rxData, ic_ad68[0].v_avgCell, i);
+        bms_parseVoltage(rxData, ic_ad68.v_cell[voltageType], i);
     }
 
-//    for (int ic = 0; ic < TOTAL_AD68; ic++)
-//    {
-//        memcpy(ic_ad68[ic].v_avgCell, vBuffer[ic], sizeof(vBuffer[ic]));
-//    }
-
-    bms_calculateStats();
-    bms_printVoltage(ic_ad68[0].v_avgCell);
-}
-
-
-void bms_readSVoltage(void)
-{
-    uint8_t* cmdList[] = {RDSVA, RDSVB, RDSVC, RDSVD, RDSVE, RDSVF};
-
-    for (int i = 0; i < 6; i++)
-    {
-        bms_receiveData(cmdList[i], rxData, rxPec, rxCc);
-        if (bms_checkRxFault(rxData, rxPec, rxCc))
-        {
-            return;
-        }
-        bms_parseVoltage(rxData, ic_ad68[0].v_sCell, i);
-    }
-
-    bms_printVoltage(ic_ad68[0].v_sCell);
+    bms_calculateStats(voltageType);
+    bms_printVoltage(voltageType);
 }
 
 
@@ -555,7 +571,7 @@ void bms_getAuxVoltage(uint8_t muxIndex)
         {
             return;
         }
-        bms_parseAuxVoltage(rxData, ic_ad68[0].v_tempSens, i, muxIndex);
+        bms_parseAuxVoltage(rxData, ic_ad68.v_cell[VOLTAGE_TEMP], i, muxIndex);
     }
 }
 
@@ -571,7 +587,7 @@ float convertCellTemp(float cellVoltage)
     if (cellVoltage > 2.44 || cellVoltage < 1.30)
     {
         // Voltage out of range
-        return 777.7;
+        return 888.0;
     }
 
     int idx;
@@ -595,7 +611,7 @@ void bms_parseTemps(void)
     {
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-            ic_ad68[ic].temp_cell[c] = convertCellTemp(ic_ad68[ic].v_tempSens[c]);
+            ic_ad68.temp_cell[ic][c] = convertCellTemp(ic_ad68.v_cell[VOLTAGE_TEMP][ic][c]);
         }
     }
 }
@@ -637,11 +653,9 @@ void bms_getAuxMeasurement(void)
     bms68_setGpo45(0b11);           // Reset to default
 
     bms_parseTemps();
-    bms_printVoltage(ic_ad68[0].v_tempSens);
-    bms_printTemps(ic_ad68[0].temp_cell);
-
-    printfDma("dieTemp: %f\n", ic_ad68[0].temp_ic);
-    printfDma("SegVoltage: %f\n", ic_ad68[0].v_segment);
+    bms_calculateStats(VOLTAGE_TEMP);
+    bms_printVoltage(VOLTAGE_TEMP);
+    bms_printTemps();
 
 //    uint32_t time = bms_getTimCount();
 //    bms_stopTimer();
@@ -649,59 +663,58 @@ void bms_getAuxMeasurement(void)
 }
 
 
-void bms_setPwm(Ic_ad68 *ic, uint8_t cell, uint8_t dutyCycle)
+void bms_setPwm(uint8_t ic_index, uint8_t cell, uint8_t dutyCycle)
 {
-//    const uint8_t dutyCycle = 0b0111;
     cell++;                                 // Change from 0 indexing to 1 indexing
 
     switch (cell) {
         case 1:
-            ic->pwma.pwm1 = dutyCycle;
+            ic_ad68.pwma[ic_index].pwm1 = dutyCycle;
             break;
         case 2:
-            ic->pwma.pwm2 = dutyCycle;
+            ic_ad68.pwma[ic_index].pwm2 = dutyCycle;
             break;
         case 3:
-            ic->pwma.pwm3 = dutyCycle;
+            ic_ad68.pwma[ic_index].pwm3 = dutyCycle;
             break;
         case 4:
-            ic->pwma.pwm4 = dutyCycle;
+            ic_ad68.pwma[ic_index].pwm4 = dutyCycle;
             break;
         case 5:
-            ic->pwma.pwm5 = dutyCycle;
+            ic_ad68.pwma[ic_index].pwm5 = dutyCycle;
             break;
         case 6:
-            ic->pwma.pwm6 = dutyCycle;
+            ic_ad68.pwma[ic_index].pwm6 = dutyCycle;
             break;
         case 7:
-            ic->pwma.pwm7 = dutyCycle;
+            ic_ad68.pwma[ic_index].pwm7 = dutyCycle;
             break;
         case 8:
-            ic->pwma.pwm8 = dutyCycle;
+            ic_ad68.pwma[ic_index].pwm8 = dutyCycle;
             break;
         case 9:
-            ic->pwma.pwm9 = dutyCycle;
+            ic_ad68.pwma[ic_index].pwm9 = dutyCycle;
             break;
         case 10:
-            ic->pwma.pwm10 = dutyCycle;
+            ic_ad68.pwma[ic_index].pwm10 = dutyCycle;
             break;
         case 11:
-            ic->pwma.pwm11 = dutyCycle;
+            ic_ad68.pwma[ic_index].pwm11 = dutyCycle;
             break;
         case 12:
-            ic->pwma.pwm12 = dutyCycle;
+            ic_ad68.pwma[ic_index].pwm12 = dutyCycle;
             break;
         case 13:
-            ic->pwmb.pwm13 = dutyCycle;
+            ic_ad68.pwmb[ic_index].pwm13 = dutyCycle;
             break;
         case 14:
-            ic->pwmb.pwm14 = dutyCycle;
+            ic_ad68.pwmb[ic_index].pwm14 = dutyCycle;
             break;
         case 15:
-            ic->pwmb.pwm15 = dutyCycle;
+            ic_ad68.pwmb[ic_index].pwm15 = dutyCycle;
             break;
         case 16:
-            ic->pwmb.pwm16 = dutyCycle;
+            ic_ad68.pwmb[ic_index].pwm16 = dutyCycle;
             break;
         default:
             // Handle invalid cases
@@ -710,6 +723,11 @@ void bms_setPwm(Ic_ad68 *ic, uint8_t cell, uint8_t dutyCycle)
 }
 
 
+/*
+ * Converts delta threshold (threshold difference between all cell voltages)
+ * to
+ * discharge threshold (voltage at which cell stop discharging)
+ */
 float bms_calculateBalancing(float deltaThreshold)
 {
     float min = 999.0;
@@ -717,13 +735,16 @@ float bms_calculateBalancing(float deltaThreshold)
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
-        if (ic_ad68[ic].v_avgCell_min < min)
+        float segment_min = ic_ad68.v_cell_min[dischargeVoltageType][ic];
+        float segment_max = ic_ad68.v_cell_max[dischargeVoltageType][ic];
+
+        if (segment_min < min)
         {
-            min = ic_ad68[ic].v_avgCell_min;
+            min = segment_min;
         }
-        if (ic_ad68[ic].v_avgCell_max > max)
+        if (segment_max > max)
         {
-            max = ic_ad68[ic].v_avgCell_max;
+            max = segment_max;
         }
     }
 
@@ -733,46 +754,42 @@ float bms_calculateBalancing(float deltaThreshold)
     }
     else
     {
-        return -999;  // No balancing needed
+        return -1;  // No balancing needed
     }
 }
 
 
-void bms_startDischarge(float threshold)
+void bms_startDischarge(float dischargeThreshold)
 {
-    threshold = 5;  // Overwrite the discharge aim voltage (for testing)
+    dischargeThreshold = 5;  // Overwrite the discharge aim voltage (for testing)
     const uint8_t dutyCycle = 0b1111;   // 4 bit pwm at 937 ms
-
-    memset(&ic_ad68[0].pwma, 0, sizeof(ad68_pwma_t));
-    memset(&ic_ad68[0].pwmb, 0, sizeof(ad68_pwmb_t));
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-            if (ic_ad68[ic].v_avgCell[c] > threshold)
+            if (ic_ad68.v_cell[dischargeVoltageType][ic][c] > dischargeThreshold)
             {
                 printfDma("DISCHARGE: IC %d, CELL %d \n", ic+1, c+1);
-                bms_setPwm(&ic_ad68[ic], c, dutyCycle);
+                BIT_SET(ic_ad68.isDischarging[ic], c);
+                bms_setPwm(ic, c, dutyCycle);
             }
             else
             {
-                bms_setPwm(&ic_ad68[ic], c, 0b0000);    // Turn off PWM discharge for that cell
+                bms_setPwm(ic, c, 0b0000);    // Turn off PWM discharge for that cell
             }
         }
+
+        // The PWM discharge functionality is possible in the standby, REF-UP, extended balancing and in the measure states
+        // AND while the discharge timeout has not expired (DCTO ≠ 0)
+        ic_ad68.cfb_Tx[ic].dcto = 1;     // DC Timer in minutes (DTRNG = 0)
+        ic_ad68.cfb_Tx[ic].dtmen = 0;    // Disables Discharge Timer Monitor (DTM)
+        // ic_ad68[0].cfb_Tx.dcc = 0b1; // --- High priority discharge (bypasses PWM)
     }
 
     // for testing -> enables discharge for cell 1
     printfDma("DISCHARGE: IC 1, CELL 1 \n");
-    ic_ad68[0].pwma.pwm1 = 0b1111;
-
-
-    // The PWM discharge functionality is possible in the standby, REF-UP, extended balancing and in the measure states
-    // AND while the discharge timeout has not expired (DCTO ≠ 0)
-
-    ic_ad68[0].cfb_Tx.dcto = 1;     // DC Timer in minutes (DTRNG = 0)
-    ic_ad68[0].cfb_Tx.dtmen = 0;    // Disables Discharge Timer Monitor (DTM)
-//    ic_ad68[0].cfb_Tx.dcc = 0b1; // --- High priority discharge (bypasses PWM)
+    ic_ad68.pwma[0].pwm1 = 0b1111;
 
     bms_writeConfigB();             // Send the DCTO Timer config
     bms_writePwmA();                // Send the PWM configs
@@ -859,7 +876,7 @@ void bms_balancingMeasureVoltage(void)
     bms_transmitCmd((uint8_t *)&ADSV);
 
     bms_transmitPoll(PLSADC);
-    bms_readSVoltage();
+    bms_readCellVoltage(dischargeVoltageType);
 }
 
 
@@ -905,9 +922,9 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
     {
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-            cellVoltage = (int16_t)(ic_ad68[ic].v_sCell[c] * 1000);
-            cellTemp    = (int16_t)(ic_ad68[ic].temp_cell[c] * 100);
-            isDischarging = ((ic_ad68[ic].isDischarging >> 1U) & 0x01);
+            cellVoltage = (int16_t)(ic_ad68.v_cell[VOLTAGE_S][ic][c] * 1000);
+            cellTemp    = (int16_t)(ic_ad68.temp_cell[ic][c] * 100);
+            isDischarging = ((ic_ad68.isDischarging[ic] >> 1U) & 0x01);
 
             packVoltage += (cellVoltage * 1000);
 

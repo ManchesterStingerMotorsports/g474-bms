@@ -235,15 +235,15 @@ int main(void)
             bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
             bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
             bms_delayMsActive(12);
-            bms_readAvgCellVoltage();
-            bms_readSVoltage();
+            bms_readCellVoltage(VOLTAGE_C_FIL);
+            bms_readCellVoltage(VOLTAGE_S);
 
             HAL_Delay(100);
             bms_wakeupChain();
             printfDma("======== C VOLTAGE MEASUREMENT ======== \n");
             for (int i = 0; i < 1; i++)
             {
-                bms_readAvgCellVoltage();
+                bms_readCellVoltage(VOLTAGE_C_FIL);
                 bms_delayMsActive(50);
             }
             printfDma("======================================= \n\n");

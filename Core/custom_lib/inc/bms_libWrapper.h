@@ -12,6 +12,17 @@
 #include "bms_can.h"
 
 
+typedef enum
+{
+    VOLTAGE_C,
+    VOLTAGE_C_AVG,
+    VOLTAGE_C_FIL,
+    VOLTAGE_S,
+    VOLTAGE_TEMP,
+    TOTAL_VOLTAGE_TYPES,
+} VoltageTypes;
+
+
 void bms_init(void);
 
 void bms_readSid(void);
@@ -27,11 +38,7 @@ void bms68_setGpo45(uint8_t twoBitIndex);
 
 void bms_startAdcvCont(void);
 
-void bms_readAvgCellVoltage(void);
-
-void bms_readSVoltage(void);
-
-void bms_openWireCheck(void);
+void bms_readCellVoltage(VoltageTypes voltageType);
 
 void bms_getAuxMeasurement(void);
 
