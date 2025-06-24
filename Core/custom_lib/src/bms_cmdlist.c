@@ -220,11 +220,6 @@ uint8_t RDAUXB[2]        = { 0x00, 0x1A };
 uint8_t RDRAXA[2]        = { 0x00, 0x1C };
 uint8_t RDRAXB[2]        = { 0x00, 0x1D };
 
-/* Pwm registers commands */
-uint8_t WRPWM1[2]        = { 0x00, 0x20 };
-uint8_t RDPWM1[2]        = { 0x00, 0x22 };
-uint8_t WRPWM2[2]        = { 0x00, 0x21 };
-uint8_t RDPWM2[2]        = { 0x00, 0x23 };
 
 /* Clear commands */
 uint8_t CLRCELL[2]       = { 0x07, 0x11 };

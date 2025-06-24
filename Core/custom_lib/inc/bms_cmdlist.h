@@ -9,7 +9,7 @@
 
 #include "stdint.h"
 
-// 2950
+// ------------------------------------- 2950 ------------------------------------- //
 
 /* configuration registers commands */
 extern uint8_t WRCFGA[2];
@@ -59,12 +59,6 @@ extern uint8_t RDFLAGERR[2];   /* ERR */
 
 /* Read all Status Registers */
 extern uint8_t RDASALL[2];
-
-/* Pwm registers commands */
-extern uint8_t WRPWM[2];
-extern uint8_t RDPWM[2];
-extern uint8_t WRPWM2[2];
-extern uint8_t RDPWM2[2];
 
 /* Clear commands */
 extern uint8_t CLRI[2];
@@ -116,7 +110,7 @@ extern uint8_t RDXB[2];
 extern uint8_t RDXC[2];
 
 
-// 6830
+// ------------------------------------- 6830 ------------------------------------- //
 
 /*!< configuration registers commands */
 extern uint8_t WRCFGA[2];
@@ -212,10 +206,10 @@ extern uint8_t RDRAXA[2];
 extern uint8_t RDRAXB[2];
 
 /* Pwm registers commands */
-extern uint8_t WRPWM1[2];
-extern uint8_t RDPWM1[2];
-extern uint8_t WRPWM2[2];
-extern uint8_t RDPWM2[2];
+extern uint8_t WRPWMA[2];
+extern uint8_t RDPWMA[2];
+extern uint8_t WRPWMB[2];
+extern uint8_t RDPWMB[2];
 
 /* Clear commands */
 extern uint8_t CLRCELL[2];

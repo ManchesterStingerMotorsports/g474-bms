@@ -47,6 +47,7 @@
 
 #include <string.h>
 #include <stdio.h>
+
 #include "main.h"
 #include "uartDMA.h"
 #include "bms_can.h"
@@ -95,7 +96,7 @@ typedef struct
     // From Read Registers
     float v_cell        [TOTAL_VOLTAGE_TYPES][TOTAL_AD68][TOTAL_CELL];        // Average of 8 samples register (C-ADC)
     // Calculated Values
-    float v_cell_diff[TOTAL_VOLTAGE_TYPES][TOTAL_AD68][TOTAL_CELL];
+    float v_cell_diff   [TOTAL_VOLTAGE_TYPES][TOTAL_AD68][TOTAL_CELL];
     float v_cell_sum    [TOTAL_VOLTAGE_TYPES][TOTAL_AD68];
     float v_cell_avg    [TOTAL_VOLTAGE_TYPES][TOTAL_AD68];
     float v_cell_min    [TOTAL_VOLTAGE_TYPES][TOTAL_AD68];
@@ -110,13 +111,20 @@ typedef struct
     // flag stored in bits
     uint16_t isDischarging          [TOTAL_AD68];         // isDischarging Flag
     uint16_t isCellFaultDetected    [TOTAL_AD68];
-    bool isCommsError               [TOTAL_AD68];
 
 } Ic_ad68;
 
 
-Ic_ad29 ic_ad29;
-Ic_ad68 ic_ad68;
+typedef struct
+{
+    bool isErrorDetected[TOTAL_IC];
+    bool isErrorComms   [TOTAL_IC];
+} Ic_common;
+
+
+Ic_common   ic_common;
+Ic_ad29     ic_ad29;
+Ic_ad68     ic_ad68;
 
 
 
@@ -134,8 +142,11 @@ void bms_resetConfig(void)
     uint64_t const ad68_cfbDefault = 0x0000007FF800;
 
     // Copy defaults to Tx Buffer
-    memcpy(&ic_ad29.cfa_Rx, &ad29_cfaDefault, DATA_LEN);
-    memcpy(&ic_ad29.cfb_Rx, &ad29_cfbDefault, DATA_LEN);
+    if (TOTAL_AD29)
+    {
+        memcpy(&ic_ad29.cfa_Rx, &ad29_cfaDefault, DATA_LEN);
+        memcpy(&ic_ad29.cfb_Rx, &ad29_cfbDefault, DATA_LEN);
+    }
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
@@ -148,67 +159,66 @@ void bms_resetConfig(void)
 }
 
 
-void bms_writeConfigA(void)
+void bms_writeRegister(RegisterTypes regType)
 {
-    // Fill buffer for ad2950 first
-    memcpy(txData[0], &ic_ad29.cfa_Tx, DATA_LEN);
+    uint8_t* command;
 
-    // Fill buffer with the other ad6830 data
-    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    // Use a switch statement to handle the logic for each register type
+    switch (regType)
     {
-        memcpy(txData[ic+1], &ic_ad68.cfa_Tx[ic], DATA_LEN);
+        case REG_CONFIG_A:
+            // Prepare data for writing to Configuration Register A
+            if (TOTAL_AD29) {
+                memcpy(txData[0], &ic_ad29.cfa_Tx, DATA_LEN);
+            }
+            for (int ic = 0; ic < TOTAL_AD68; ic++) {
+                memcpy(txData[ic + TOTAL_AD29], &ic_ad68.cfa_Tx[ic], DATA_LEN);
+            }
+            command = WRCFGA; // Set the specific command for this operation
+            break;
+
+        case REG_CONFIG_B:
+            // Prepare data for writing to Configuration Register B
+            if (TOTAL_AD29) {
+                memcpy(txData[0], &ic_ad29.cfb_Tx, DATA_LEN);
+            }
+            for (int ic = 0; ic < TOTAL_AD68; ic++) {
+                memcpy(txData[ic + TOTAL_AD29], &ic_ad68.cfb_Tx[ic], DATA_LEN);
+            }
+            command = WRCFGB; // Set the specific command for this operation
+            break;
+
+        case REG_PWM_A:
+            // Prepare data for writing to PWM Register Group A
+            if (TOTAL_AD29) {
+                memset(txData[0], 0x00, DATA_LEN); // PWM registers for ad29 are padded with 0
+            }
+            for (int ic = 0; ic < TOTAL_AD68; ic++) {
+                memcpy(txData[ic + TOTAL_AD29], &ic_ad68.pwma[ic], DATA_LEN);
+            }
+            command = WRPWMA; // Set the specific command for this operation
+            break;
+
+        case REG_PWM_B:
+            // Prepare data for writing to PWM Register Group B
+            if (TOTAL_AD29) {
+                memset(txData[0], 0x00, DATA_LEN); // PWM registers for ad29 are padded with 0
+            }
+            for (int ic = 0; ic < TOTAL_AD68; ic++) {
+                memcpy(txData[ic + TOTAL_AD29], &ic_ad68.pwmb[ic], DATA_LEN);
+            }
+            command = WRPWMB; // Set the specific command for this operation
+            break;
+
+        default:
+            // In case of an invalid regType
+            Error_Handler();
+            return;
     }
 
-    // write config A
-    bms_transmitData(WRCFGA, txData);
-}
-
-
-void bms_writeConfigB(void)
-{
-    // Fill buffer for ad2950 first
-    memcpy(txData[0], &ic_ad29.cfb_Tx, DATA_LEN);
-
-    // Fill buffer with the other ad6830 data
-    for (int ic = 0; ic < TOTAL_AD68; ic++)
-    {
-        memcpy(txData[ic+1], &ic_ad68.cfb_Tx[ic], DATA_LEN);
-    }
-
-    // write config B
-    bms_transmitData(WRCFGB, txData);
-}
-
-
-void bms_writePwmA(void)
-{
-    // Fill padding bytes for ad29
-    memset(txData[0], 0x00, DATA_LEN);
-
-    // Fill buffer with the other ad6830 data
-    for (int ic = 0; ic < TOTAL_AD68; ic++)
-    {
-        memcpy(txData[ic+1], &ic_ad68.pwma[ic], DATA_LEN);
-    }
-
-    // write config A
-    bms_transmitData(WRPWM1, txData);
-}
-
-
-void bms_writePwmB(void)
-{
-    // Fill padding bytes for ad29
-    memset(txData[0], 0x00, DATA_LEN);
-
-    // Fill buffer with the other ad6830 data
-    for (int ic = 0; ic < TOTAL_AD68; ic++)
-    {
-        memcpy(txData[ic+1], &ic_ad68.pwmb[ic], DATA_LEN);
-    }
-
-    // write config B
-    bms_transmitData(WRPWM2, txData);
+    // After preparing the buffer, transmit the data with the selected command.
+    // This part is common to all cases.
+    bms_transmitData(command, txData);
 }
 
 
@@ -216,13 +226,24 @@ void bms_init(void)
 {
     bms_resetConfig();
 
+    // For 2950 - Enable voltage measurements (Refer Schematic)
+    if (TOTAL_AD29)
+    {
+        ic_ad29.cfa_Tx.gpo1c  = 1;      // State control
+        ic_ad29.cfa_Tx.gpo1od = 0;      // 1 = Open drain, 0 = push-pull
+        ic_ad29.cfa_Tx.gpo2c  = 1;      // State control
+        ic_ad29.cfa_Tx.gpo2od = 0;      // 1 = Open drain, 0 = push-pull
+    }
+
+    // For 6830 Configs
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
         ic_ad68.cfa_Tx[ic].refon = 0b1;
         ic_ad68.cfa_Tx[ic].fc = 0b001;    // 110 Hz corner freq
     }
 
-    bms_writeConfigA();
+    bms_writeRegister(REG_CONFIG_A);
+    bms_readRegister(REG_SID);
 }
 
 
@@ -235,7 +256,7 @@ void bms68_setGpo45(uint8_t twoBitIndex)
         ic_ad68.cfa_Tx[ic].gpo1to8 = ((twoBitIndex) << 3) | (0xFF ^ (0x3 << 3));
     }
 
-    bms_writeConfigA();
+    bms_writeRegister(REG_CONFIG_A);
 }
 
 
@@ -277,13 +298,13 @@ void bms_printRawData(uint8_t data[TOTAL_IC][DATA_LEN], uint8_t cc[TOTAL_IC])
 //uint8_t bms_checkComms(void)
 //{
 //    bms_softReset();
-//    bms_readSid();
+//    bms_readRegister(REG_SID);
 //}
 
 bool bms_checkRxFault(uint8_t data[TOTAL_IC][DATA_LEN], uint16_t pec[TOTAL_IC], uint8_t cc[TOTAL_IC])
 {
     bool faultDetected = false;
-    bool errorIndex[TOTAL_IC];
+    bool* errorIndex = ic_common.isErrorComms;
 
     if (!bms_checkRxPec(data, pec, cc, errorIndex))
     {
@@ -307,36 +328,46 @@ bool bms_checkRxFault(uint8_t data[TOTAL_IC][DATA_LEN], uint16_t pec[TOTAL_IC], 
 
 
 // used mostly for debugging purposes
-void bms_readSid(void)
+uint8_t bms_readRegister(RegisterTypes regType)
 {
-    bms_receiveData(RDSID, rxData, rxPec, rxCc);
+    char* title;
+    uint8_t* cmd;
+    switch (regType)
+    {
+    case REG_CONFIG_A:
+        title = "Config A Register";
+        cmd = RDCFGA;
+        break;
+    case REG_CONFIG_B:
+        title = "Config B Register";
+        cmd = RDCFGB;
+        break;
+    case REG_PWM_A:
+        title = "PWM A Register";
+        cmd = RDPWMA;
+        break;
+    case REG_PWM_B:
+        title = "PWM B Register";
+        cmd = RDPWMB;
+        break;
+    case REG_SID:
+        title = "SID Register";
+        cmd = RDSID;
+        break;
+    default:
+        Error_Handler(); // Invalid Choice
+        break;
+    }
+
+    bms_receiveData(cmd, rxData, rxPec, rxCc);
     if (bms_checkRxFault(rxData, rxPec, rxCc))
     {
-        printfDma("SID: \n");
-        bms_printRawData(rxData, rxCc);
+        return -1;
     }
-}
 
-
-void bms_readConfigA(void)
-{
-    bms_receiveData(RDCFGA, rxData, rxPec, rxCc);
-    if (bms_checkRxFault(rxData, rxPec, rxCc))
-    {
-        printfDma("CFGA: \n");
-        bms_printRawData(rxData, rxCc);
-    }
-}
-
-
-void bms_readConfigB(void)
-{
-    bms_receiveData(RDCFGB, rxData, rxPec, rxCc);
-    if (bms_checkRxFault(rxData, rxPec, rxCc))
-    {
-        printfDma("CFGB: \n");
-        bms_printRawData(rxData, rxCc);
-    }
+    printfDma("%s: \n", title);
+    bms_printRawData(rxData, rxCc);
+    return 0;
 }
 
 
@@ -475,6 +506,7 @@ void bms_printVoltage(VoltageTypes voltageType)
         title = "Temperature Sensors Voltage";
         break;
     default:
+        Error_Handler();
         break;
     }
     printfDma("%s: \n", title);
@@ -541,7 +573,7 @@ uint8_t* readCellVoltageCmdList[TOTAL_VOLTAGE_TYPES][6] = {
         {} // VOLTAGE_TEMP
 };
 
-void bms_readCellVoltage(VoltageTypes voltageType)
+uint8_t bms_readCellVoltage(VoltageTypes voltageType)
 {
     uint8_t** cmdList = readCellVoltageCmdList[voltageType];
 
@@ -550,17 +582,18 @@ void bms_readCellVoltage(VoltageTypes voltageType)
         bms_receiveData(cmdList[i], rxData, rxPec, rxCc);
         if (bms_checkRxFault(rxData, rxPec, rxCc))
         {
-            return;
+            return -1;
         }
         bms_parseVoltage(rxData, ic_ad68.v_cell[voltageType], i);
     }
 
     bms_calculateStats(voltageType);
     bms_printVoltage(voltageType);
+    return 0;
 }
 
 
-void bms_getAuxVoltage(uint8_t muxIndex)
+uint8_t bms_getAuxVoltage(uint8_t muxIndex)
 {
     uint8_t* cmdList[] = {RDAUXA, RDAUXB, RDAUXC, RDAUXD, RDSTATA};
 
@@ -569,14 +602,15 @@ void bms_getAuxVoltage(uint8_t muxIndex)
         bms_receiveData(cmdList[i], rxData, rxPec, rxCc);
         if (bms_checkRxFault(rxData, rxPec, rxCc))
         {
-            return;
+            return -1;
         }
         bms_parseAuxVoltage(rxData, ic_ad68.v_cell[VOLTAGE_TEMP], i, muxIndex);
     }
+    return 0;
 }
 
 
-float convertCellTemp(float cellVoltage)
+float static convertCellTemp(float cellVoltage)
 {
     // From datasheet
     static const float tempValues[]    = { -40,  -35,  -30,  -25,  -20,  -15,  -10,   -5,    0,    5,   10,   15,   20,   25,   30,   35,   40,   45,   50,   55,   60,   65,   70,   75,   80,   85,   90,   95,  100,  105,  110,  115,  120};
@@ -635,21 +669,21 @@ void bms_getAuxMeasurement(void)
 
     bms_wakeupChain();
 
-    // TODO: CHANGE THE NAME ITS 54 SHOULD
-//    bms68_setGpo45(0b11);           // Enable 3V3 Converter
-//    bms_delayMsActive(25);          // 20ms start-up time based on TEC 2-4810WI datasheet
-
     bms_transmitCmd((uint8_t *)&ADAX);
     bms_transmitPoll(PLAUX1);
-    bms_getAuxVoltage(1);
-
+    if (bms_getAuxVoltage(1))           // Has to be 1 first due to the mux switching
+    {
+        return;
+    }
     bms68_setGpo45(0b00);           // Switch to the other Mux Channel
     bms_delayMsActive(1);           // Small delay for switching
 
     bms_transmitCmd((uint8_t *)&ADAX);
     bms_transmitPoll(PLAUX1);
-    bms_getAuxVoltage(0);
-
+    if (bms_getAuxVoltage(0))
+    {
+        return;
+    }
     bms68_setGpo45(0b11);           // Reset to default
 
     bms_parseTemps();
@@ -791,16 +825,29 @@ void bms_startDischarge(float dischargeThreshold)
     printfDma("DISCHARGE: IC 1, CELL 1 \n");
     ic_ad68.pwma[0].pwm1 = 0b1111;
 
-    bms_writeConfigB();             // Send the DCTO Timer config
-    bms_writePwmA();                // Send the PWM configs
-    bms_writePwmB();                // Send the PWM configs
+    bms_writeRegister(REG_CONFIG_B);             // Send the DCTO Timer config
+    bms_writeRegister(REG_PWM_A);                // Send the PWM configs
+    bms_writeRegister(REG_PWM_B);                // Send the PWM configs
 }
 
 
 void bms_stopDischarge(void)
 {
-    // TODO: Stop discharege without resetting
-    bms_softReset();
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        for (int c = 0; c < TOTAL_CELL; c++)
+        {
+            bms_setPwm(ic, c, 0b0000);    // Turn off PWM discharge for that cell
+        }
+
+        // The PWM discharge functionality is possible in the standby, REF-UP, extended balancing and in the measure states
+        // AND while the discharge timeout has not expired (DCTO ≠ 0)
+        ic_ad68.cfb_Tx[ic].dcto = 0;     // DC Timer in minutes (DTRNG = 0)
+        ic_ad68.cfb_Tx[ic].dtmen = 0;    // Disables Discharge Timer Monitor (DTM)
+    }
+    bms_writeRegister(REG_CONFIG_B);             // Send the DCTO Timer config
+    bms_writeRegister(REG_PWM_A);                // Send the PWM configs
+    bms_writeRegister(REG_PWM_B);                // Send the PWM configs
 }
 
 
@@ -812,22 +859,13 @@ void bms_softReset(void)
 }
 
 
-void bms29_setGpo(void)
-{
-    ic_ad29.cfa_Tx.gpo1c  = 1;      // State control
-    ic_ad29.cfa_Tx.gpo1od = 0;      // 1 = Open drain, 0 = push-pull
-    ic_ad29.cfa_Tx.gpo2c  = 1;      // State control
-    ic_ad29.cfa_Tx.gpo2od = 0;      // 1 = Open drain, 0 = push-pull
-
-    bms_writeConfigA();
-}
-
-
 void bms29_readVB(void)
 {
     bms_receiveData(RDVB, rxData, rxPec, rxCc);
-    bms_checkRxFault(rxData, rxPec, rxCc);
-//    bms_printRawData(rxData, rxCc);
+    if (bms_checkRxFault(rxData, rxPec, rxCc))
+    {
+        return;
+    }
     ic_ad29.vb1 = *((int16_t *)(rxData[0] + 2)) *  0.000100 * 396.604395604;
     ic_ad29.vb2 = *((int16_t *)(rxData[0] + 4)) * -0.000085 * 751;
     printfDma("VB: %fV, %fV  \n\n", ic_ad29.vb1, ic_ad29.vb2);
@@ -838,7 +876,10 @@ void bms29_readVB(void)
 void bms29_readCurrent(void)
 {
     bms_receiveData(RDI, rxData, rxPec, rxCc);
-    bms_checkRxFault(rxData, rxPec, rxCc);
+    if (bms_checkRxFault(rxData, rxPec, rxCc))
+    {
+        return;
+    }
 //    bms_printRawData(rxData, rxCc);
 
     // microvolts

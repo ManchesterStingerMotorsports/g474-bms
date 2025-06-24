@@ -159,12 +159,12 @@ void BMS_CAN_SendBuffer(CanTxMsg* msgArr, uint32_t len)
 {
     if (len > BUFFER_LEN)
     {
-        printfDma("Error CANTX: len larger than buffer\n");
+        printfDma("Error CANTX: len larger than buffer \n");
         return;
     }
     if (isBufferTransmitting)
     {
-        printfDma("Error CANTX: previous buffer tx overwritten");
+        printfDma("Error CANTX: previous buffer tx overwritten \n");
     }
 
     isBufferTransmitting = false;       // Disable recursive callback in case some are still being sent

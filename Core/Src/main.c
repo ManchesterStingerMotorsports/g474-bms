@@ -169,13 +169,10 @@ int main(void)
 
     bms_wakeupChain();
     bms_init();             // Initialise BMS configs and send them
-    bms_readSid();
 
     bmsState = IDLE;
     bmsPrevState = IDLE;
     bmsCurrState = IDLE;
-
-
 
     while (1)
     {
@@ -185,9 +182,7 @@ int main(void)
         {
             bms_wakeupChain();
             bms_init();             // Initialise BMS configs and send them
-            bms_readSid();
             bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-            bms29_setGpo();
 
             if (bmsState == ACTIVE)
             {
@@ -231,7 +226,6 @@ int main(void)
 
             timeStart = getRuntimeMs();
 
-            printfDma("C Voltage: \n");
             bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
             bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
             bms_delayMsActive(12);
@@ -264,19 +258,16 @@ int main(void)
 //            HAL_Delay(500);
 //
 ////            bms_wakeupChain();
-////            bms_readSid();
-//
+////            bms_readRegister(REG_SID);
+
             bms_wakeupChain();
             bms29_readVB();
             bms29_readCurrent();
-
-//            BMS_CAN_Test();
 
             CanTxMsg *msgArr = NULL;
             uint32_t len = 0;
             BMS_GetCanData(&msgArr, &len);
             BMS_CAN_SendBuffer(msgArr, len);
-
 
             HAL_Delay(1000);
 
@@ -286,7 +277,6 @@ int main(void)
             break;
 
         case INACTIVE:
-
             bms_stopDischarge();
             bmsState = IDLE;
             HAL_Delay(500);
@@ -387,7 +377,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     if(GPIO_Pin == B1_Pin) // If The INT Source Is EXTI Line9 (A9 Pin)
     {
         // Do something when button pressed
-        if (bmsState == ACTIVE)
+        if (bmsCurrState == ACTIVE)
         {
             bmsState = INACTIVE;
         }
@@ -398,6 +388,23 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     }
 }
 
+
+void BMS_FaultCommsHandler(void)
+{
+    // Reset
+    // wait 200 ms
+    // Retry Comms
+    // if 3 times, open relay
+    // Repeat
+    // Add Error Counter
+    //
+    //
+}
+
+void BMS_FaultHandler(void)
+{
+
+}
 
 
 /* USER CODE END 4 */

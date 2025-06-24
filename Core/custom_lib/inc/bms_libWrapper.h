@@ -22,44 +22,41 @@ typedef enum
     TOTAL_VOLTAGE_TYPES,
 } VoltageTypes;
 
+typedef enum {
+    REG_CONFIG_A,
+    REG_CONFIG_B,
+    REG_PWM_A,
+    REG_PWM_B,
+    REG_SID,
+    TOTAL_REG_TYPES,
+} RegisterTypes;
+
 
 void bms_init(void);
 
-void bms_readSid(void);
-
-void bms_readConfigA(void);
-
-void bms_readConfigB(void);
-
-
-
 void bms68_setGpo45(uint8_t twoBitIndex);
-
 
 void bms_startAdcvCont(void);
 
-void bms_readCellVoltage(VoltageTypes voltageType);
+uint8_t bms_readCellVoltage(VoltageTypes voltageType);
+
+uint8_t bms_readRegister(RegisterTypes regTypes);
 
 void bms_getAuxMeasurement(void);
-
-
-float bms_calculateBalancing(float deltaThreshold);
 
 void bms_startDischarge(float threshold);
 
 void bms_stopDischarge(void);
+
 void bms_softReset(void);
 
-
-void bms29_setGpo(void);
-
 void bms29_readVB(void);
+
 void bms29_readCurrent(void);
 
 void bms_balancingMeasureVoltage(void);
 
 void bms_startBalancing(float deltaThreshold);
-
 
 void BMS_GetCanData(CanTxMsg** buff, uint32_t* len);
 
