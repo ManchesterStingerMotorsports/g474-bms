@@ -50,11 +50,10 @@ const float deltaThreshold = 0.010; // In volts
 
 typedef enum
 {
-    ACTIVE,
-    BALANCING,
-    CHARGING,
-    INACTIVE,
-    IDLE,
+    STATE_INIT,
+    STATE_ACTIVE,
+    STATE_CHARGING,
+    STATE_IDLE,
 } BmsStates;
 
 volatile BmsStates bmsState;         // Controlled by ISR
@@ -163,16 +162,12 @@ int main(void)
     uint32_t timeStart;
 
     printfDma("\n\n +++++             PROGRAM START             +++++ \n\n");
-
     bms_softReset();
-    HAL_Delay(200);         // Initialisation delay
+    HAL_Delay(500);         // Initialisation delay
 
-    bms_wakeupChain();
-    bms_init();             // Initialise BMS configs and send them
-
-    bmsState = IDLE;
-    bmsPrevState = IDLE;
-    bmsCurrState = IDLE;
+    bmsState = STATE_INIT;
+    bmsPrevState = STATE_INIT;
+    bmsCurrState = STATE_INIT;
 
     while (1)
     {
@@ -180,53 +175,38 @@ int main(void)
 
         if (bmsPrevState != bmsCurrState)
         {
-//            bms_wakeupChain();
-//            bms_init();             // Initialise BMS configs and send them
-//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+            bms_wakeupChain();
+            bms_softReset();
+            bms_init();             // Initialise BMS configs and send them
 
-            if (bmsState == ACTIVE)
+            switch (bmsCurrState)
             {
+            case STATE_ACTIVE:
                 BMS_LoopActiveInit();
-                // Measure the current cell voltage first
-//                printfDma("Measuring Cell Voltage: \n");
-//                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-//                bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-//                bms_delayMsActive(12);
-//                bms_readAvgCellVoltage();
-//
-//                bms_startBalancing(deltaThreshold); // Uses the current C value, so need to measure the cell voltage first
-
-//                // Calculate the discharge threshold
-//                float discharge_threshold = bms_calculateBalancing(deltaThreshold);
-//
-//                // Check if need to balance the cells
-//                if (discharge_threshold > 0)
-//                {
-//                    printfDma("Start Discharge: \n");
-//                    bms_wakeupChain();
-//                    bms_startDischarge(discharge_threshold);
-//
-//                    bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-//                    bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-//                    bms_delayMsActive(12);
-//                }
-
-//                HAL_Delay(1000);
+                break;
+            case STATE_IDLE:
+                BMS_LoopIdleInit();
+                break;
+            case STATE_CHARGING:
+                BMS_LoopChargingInit();
+            default:
+                bms_stopDischarge();
+                bmsState = STATE_INIT;
+                break;
             }
             bmsPrevState = bmsCurrState;
         }
 
+        timeStart = getRuntimeMs();
 
         switch(bmsCurrState)
         {
-        case ACTIVE:
-
-            timeStart = getRuntimeMs();
-
+        case STATE_ACTIVE:
             if (BMS_LoopActive() == BMS_ERR_COMMS)
             {
                 BMS_FaultCommsHandler();
             }
+            HAL_Delay(500);
 
 //            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
 //            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
@@ -273,21 +253,21 @@ int main(void)
 //
 //            HAL_Delay(1000);
 //
-            timeDiff = getRuntimeMsDiff(timeStart);
-            printfDma("\nRuntime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
             break;
 
-        case INACTIVE:
-            bms_stopDischarge();
-            bmsState = IDLE;
-            HAL_Delay(500);
+
+        case STATE_IDLE:
+            BMS_LoopIdle();
+            HAL_Delay(900);
             break;
 
         default:
+            HAL_Delay(1000);
             break;
         }
 
-        HAL_Delay(100);
+        timeDiff = getRuntimeMsDiff(timeStart);
+        printfDma("\nRuntime: %ld ms, LoopTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
 
     /* USER CODE END WHILE */
 
@@ -352,9 +332,15 @@ void SystemClock_Config(void)
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     // Check which version of the timer triggered this callback and toggle LED
-    if (htim == &htim16)
+    if (htim == &htim16) // This is triggered every second
     {
         runtime_sec += 1;
+        // check CAN status
+        // check for faults
+        // check for bms status
+        // if OK, get can data
+        // send CAN messages
+
     }
 }
 
@@ -378,13 +364,13 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     if(GPIO_Pin == B1_Pin) // If The INT Source Is EXTI Line9 (A9 Pin)
     {
         // Do something when button pressed
-        if (bmsCurrState == ACTIVE)
+        if (bmsCurrState == STATE_ACTIVE)
         {
-            bmsState = INACTIVE;
+            bmsState = STATE_IDLE;
         }
         else
         {
-            bmsState = ACTIVE;
+            bmsState = STATE_ACTIVE;
         }
     }
 }

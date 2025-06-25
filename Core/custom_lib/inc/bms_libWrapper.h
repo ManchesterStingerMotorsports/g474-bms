@@ -11,6 +11,8 @@
 #include "main.h"
 #include "bms_can.h"
 
+#include <stdbool.h>
+
 
 typedef enum
 {
@@ -36,7 +38,7 @@ void bms_init(void);
 
 void bms68_setGpo45(uint8_t twoBitIndex);
 
-void bms_startAdcvCont(void);
+void bms_startAdcvCont(bool enableRedundant);
 
 BMS_StatusTypeDef bms_readCellVoltage(VoltageTypes voltageType);
 
@@ -54,15 +56,20 @@ BMS_StatusTypeDef bms29_readVB(void);
 
 BMS_StatusTypeDef bms29_readCurrent(void);
 
-void bms_balancingMeasureVoltage(void);
+BMS_StatusTypeDef bms_balancingMeasureVoltage(void);
 
 void bms_startBalancing(float deltaThreshold);
 
 void BMS_GetCanData(CanTxMsg** buff, uint32_t* len);
 
+
 BMS_StatusTypeDef BMS_LoopActiveInit(void);
 BMS_StatusTypeDef BMS_LoopActive(void);
+
+BMS_StatusTypeDef BMS_LoopChargingInit(void);
 BMS_StatusTypeDef BMS_LoopCharging(void);
-BMS_StatusTypeDef BMS_LoopIDLE(void);
+
+BMS_StatusTypeDef BMS_LoopIdleInit(void);
+BMS_StatusTypeDef BMS_LoopIdle(void);
 
 

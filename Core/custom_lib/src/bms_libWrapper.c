@@ -53,20 +53,6 @@
 #include "bms_can.h"
 
 
-uint8_t  txData[TOTAL_IC][DATA_LEN];
-uint8_t  rxData[TOTAL_IC][DATA_LEN];
-uint16_t rxPec[TOTAL_IC];
-uint8_t  rxCc[TOTAL_IC];
-
-uint32_t errorCount = 0;
-uint32_t errorCount_Alltime = 0;
-
-VoltageTypes dischargeVoltageType = VOLTAGE_S;
-
-#define CAN_BUFFER_LEN (7 * 16 + 32)       // TODO: Accurate buffer size
-CanTxMsg canTxBuffer[CAN_BUFFER_LEN];
-
-
 typedef struct
 {
     ad29_cfa_t cfa_Tx;
@@ -117,8 +103,8 @@ typedef struct
 
 typedef struct
 {
-    bool isErrorDetected[TOTAL_IC];
-    bool isErrorComms   [TOTAL_IC];
+    bool isFaultDetected    [TOTAL_IC];
+    bool isCommsError       [TOTAL_IC];
 } Ic_common;
 
 
@@ -126,6 +112,17 @@ Ic_common   ic_common;
 Ic_ad29     ic_ad29;
 Ic_ad68     ic_ad68;
 
+uint8_t  txData[TOTAL_IC][DATA_LEN];
+uint8_t  rxData[TOTAL_IC][DATA_LEN];
+uint16_t rxPec[TOTAL_IC];
+uint8_t  rxCc[TOTAL_IC];
+
+VoltageTypes dischargeVoltageType = VOLTAGE_S;
+
+#define CAN_BUFFER_LEN (7 * 16 + 32)       // TODO: Accurate buffer size
+CanTxMsg canTxBuffer[CAN_BUFFER_LEN];
+
+const float balancingThreshold = 0.002; // Volts
 
 
 void bms_resetConfig(void)
@@ -154,8 +151,8 @@ void bms_resetConfig(void)
         memcpy(&ic_ad68.cfb_Tx[ic], &ad68_cfbDefault, DATA_LEN);
     }
 
-    ad68_cfa_t ad68_cfaT;
-    memcpy(&ad68_cfaT, &ad68_cfaDefault, DATA_LEN);
+//    ad68_cfa_t ad68_cfaT;
+//    memcpy(&ad68_cfaT, &ad68_cfaDefault, DATA_LEN);
 }
 
 
@@ -275,36 +272,10 @@ void bms_printRawData(uint8_t data[TOTAL_IC][DATA_LEN], uint8_t cc[TOTAL_IC])
 }
 
 
-//void bms_pecErrorHandler(uint8_t err)
-//{
-//    if (err == 0)
-//    {
-//       return;
-//    }
-//    printfDma("WARNING! PEC ERROR - IC: %d", err);
-//    errorCount++;
-//    errorCount_Alltime++;
-//
-//    if (errorCount >= 3)
-//    {
-//        bms_resetSequnce();
-//    }
-//    else
-//    {
-//        bms_retryComms();
-//    }
-//}
-//
-//uint8_t bms_checkComms(void)
-//{
-//    bms_softReset();
-//    bms_readRegister(REG_SID);
-//}
-
 bool bms_checkRxFault(uint8_t data[TOTAL_IC][DATA_LEN], uint16_t pec[TOTAL_IC], uint8_t cc[TOTAL_IC])
 {
     bool faultDetected = false;
-    bool* errorIndex = ic_common.isErrorComms;
+    bool* errorIndex = ic_common.isCommsError;
 
     if (!bms_checkRxPec(data, pec, cc, errorIndex))
     {
@@ -372,19 +343,20 @@ BMS_StatusTypeDef bms_readRegister(RegisterTypes regType)
 }
 
 
-void bms_startAdcvCont(void)
+void bms_startAdcvCont(bool enableRedundant)
 {
     // 6830
     // For DCP = 0
-    // If RD = 0 and CONT = 1, PWM discharge is permitted
-    // If RD = 1 and CONT = 0, PWM discharge interrupted temporarily until RD conversion finished (8ms typ)
-    // If RD = 1 and CONT = 1, PWM discharge stopped
+    // If RD = 0 and CONT = 1, PWM discharge is unaffected
+    // If RD = 1 and CONT = 0, (Might be wrong) PWM discharge interrupted temporarily until RD conversion finished (8ms typ)
+    // If RD = 1 and CONT = 1, PWM discharge interrupted
 
     ADCV.CONT = 1;      // Continuous
-    ADCV.RD   = 1;      // Redundant Measurement
     ADCV.DCP  = 0;      // Discharge permitted
     ADCV.RSTF = 1;      // Reset filter
     ADCV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
+
+    ADCV.RD   = enableRedundant;      // Redundant Measurement
 
     // Behaviour of 2950 (ADI1 Command)
     //
@@ -800,16 +772,34 @@ float bms_calculateBalancing(float deltaThreshold)
 
 void bms_startDischarge(float dischargeThreshold)
 {
-    dischargeThreshold = 5;  // Overwrite the discharge aim voltage (for testing)
-    const uint8_t dutyCycle = 0b1111;   // 4 bit pwm at 937 ms
+//    dischargeThreshold = 5;  // Overwrite the discharge aim voltage (for testing)
+    uint32_t cellDischargeCount;                    // Keep count of how many cells will be discharged per segment
+    uint8_t dutyCycle = 0;                          // 4 bit pwm at 937 ms
+    const uint8_t maxDischarge = (0b0111 * 16);    // All cells discharge at half duty
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
+        cellDischargeCount = 0;
+
         for (int c = 0; c < TOTAL_CELL; c++)
         {
             if (ic_ad68.v_cell[dischargeVoltageType][ic][c] > dischargeThreshold)
             {
-                printfDma("DISCHARGE: IC %d, CELL %d \n", ic+1, c+1);
+                cellDischargeCount++;
+            }
+        }
+
+        dutyCycle = maxDischarge / cellDischargeCount;
+        if (dutyCycle > 0b1111)
+        {
+            dutyCycle = 0b1111;
+        }
+
+        for (int c = 0; c < TOTAL_CELL; c++)
+        {
+            if (ic_ad68.v_cell[dischargeVoltageType][ic][c] > dischargeThreshold)
+            {
+                printfDma("DISCHARGE: IC %d, CELL %d, DC %d \n", ic+1, c+1, dutyCycle);
                 BIT_SET(ic_ad68.isDischarging[ic], c);
                 bms_setPwm(ic, c, dutyCycle);
             }
@@ -827,8 +817,8 @@ void bms_startDischarge(float dischargeThreshold)
     }
 
     // for testing -> enables discharge for cell 1
-    printfDma("DISCHARGE: IC 1, CELL 1 \n");
-    ic_ad68.pwma[0].pwm1 = 0b1111;
+//    printfDma("DISCHARGE: IC 1, CELL 1 \n");
+//    ic_ad68.pwma[0].pwm1 = 0b1111;
 
     bms_writeRegister(REG_CONFIG_B);             // Send the DCTO Timer config
     bms_writeRegister(REG_PWM_A);                // Send the PWM configs
@@ -923,7 +913,7 @@ BMS_StatusTypeDef bms29_readCurrent(void)
 
 
 
-void bms_balancingMeasureVoltage(void)
+BMS_StatusTypeDef bms_balancingMeasureVoltage(void)
 {
     // 6830
     // ADSV For triggering single shot S conversion (stops PWM) while C in unaffected
@@ -938,7 +928,12 @@ void bms_balancingMeasureVoltage(void)
     bms_transmitCmd((uint8_t *)&ADSV);
 
     bms_transmitPoll(PLSADC);
-    bms_readCellVoltage(dischargeVoltageType);
+    if (bms_readCellVoltage(dischargeVoltageType))
+    {
+        return BMS_ERR_COMMS;
+    }
+
+    return BMS_OK;
 }
 
 
@@ -1025,10 +1020,163 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
     *buff = canTxBuffer;
 }
 
+
+BMS_StatusTypeDef bms_checkStatus(void)
+{
+    // Check voltage
+    // Check temp
+
+    const float MAX_PACK_VOLTAGE = 4.2 * 16 * 7;
+    const float MIN_PACK_VOLTAGE = 3.0 * 16 * 7;
+
+    const float MAX_CURRENT = 10.0;
+    const float MIN_CURRENT = -MAX_CURRENT;
+
+    const float MAX_VOLTAGE = 4.2;
+    const float MIN_VOLTAGE = 3.0;
+
+    const float MAX_IC_VOLTAGE = 4.2 * 16;
+    const float MIN_IC_VOLTAGE = 3.0 * 16;
+
+    const float MAX_TEMP = 60;
+    const float MIN_TEMP = 0;
+
+    const float MAX_IC_TEMP = 70;
+    const float MIN_IC_TEMP = 0;
+
+    BMS_StatusTypeDef status = BMS_OK;
+
+    if (TOTAL_AD29)
+    {
+        float packVoltage = ic_ad29.vb1;        // TODO: Figure out how to combine 2 values
+        float packCurrent = ic_ad29.current1;
+
+        if (packVoltage > MAX_PACK_VOLTAGE)
+        {
+            printfDma("Pack Overvoltage Detected: %f V \n", packVoltage);
+            ic_common.isFaultDetected[0] = true;
+            status = BMS_ERR_FAULT;
+        }
+
+        if (packVoltage < MIN_PACK_VOLTAGE)
+        {
+            printfDma("Pack Undervoltage Detected: %f V \n", packVoltage);
+            ic_common.isFaultDetected[0] = true;
+            status = BMS_ERR_FAULT;
+        }
+
+        if (packCurrent > MAX_CURRENT)
+        {
+            printfDma("Pack OverTemp Detected: %f C \n", packCurrent);
+            ic_common.isFaultDetected[0] = true;
+            status = BMS_ERR_FAULT;
+        }
+
+        if (packCurrent < MIN_CURRENT)
+        {
+            printfDma("Pack UnderTemp Detected: %f C \n", packCurrent);
+            ic_common.isFaultDetected[0] = true;
+            status = BMS_ERR_FAULT;
+        }
+    }
+
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        for (int c = 0; c < TOTAL_CELL; c++)
+        {
+            float cellVoltage = ic_ad68.v_cell[dischargeVoltageType][ic][c];
+            float cellTemp = ic_ad68.temp_cell[ic][c];
+
+            if (cellVoltage > MAX_VOLTAGE)
+            {
+                printfDma("Overvoltage Detected: SEG %d, CELL %d, %f \n", ic+1, c+1, cellVoltage);
+                BIT_SET(ic_ad68.isCellFaultDetected[ic], c);
+                status = BMS_ERR_FAULT;
+            }
+
+            if (cellVoltage < MIN_VOLTAGE)
+            {
+                printfDma("Undervoltage Detected: SEG %d, CELL %d, %f \n", ic+1, c+1, cellVoltage);
+                BIT_SET(ic_ad68.isCellFaultDetected[ic], c);
+                status = BMS_ERR_FAULT;
+            }
+
+            if (cellTemp > MAX_TEMP)
+            {
+                printfDma("OverTemp Detected: SEG %d, CELL %d, %f \n", ic+1, c+1, cellTemp);
+                BIT_SET(ic_ad68.isCellFaultDetected[ic], c);
+                status = BMS_ERR_FAULT;
+            }
+
+            if (cellTemp < MIN_TEMP)
+            {
+                printfDma("UnderTemp Detected: SEG %d, CELL %d, %f \n", ic+1, c+1, cellTemp);
+                BIT_SET(ic_ad68.isCellFaultDetected[ic], c);
+                status = BMS_ERR_FAULT;
+            }
+        }
+
+        float icVoltage = ic_ad68.v_segment[ic];
+        float icTemp = ic_ad68.temp_ic[ic];
+
+        if (icVoltage > MAX_IC_VOLTAGE)
+        {
+            printfDma("IC Overvoltage Detected: SEG %d, %f \n", ic+1, icVoltage);
+            ic_common.isFaultDetected[ic + TOTAL_AD29] = true;
+            status = BMS_ERR_FAULT;
+        }
+
+        if (icVoltage < MIN_IC_VOLTAGE)
+        {
+            printfDma("IC Undervoltage Detected: SEG %d, %f \n", ic+1, icVoltage);
+            ic_common.isFaultDetected[ic + TOTAL_AD29] = true;
+            status = BMS_ERR_FAULT;
+        }
+
+        if (icTemp > MAX_IC_TEMP)
+        {
+            printfDma("IC OverTemp Detected: SEG %d, %f \n", ic+1, icTemp);
+            ic_common.isFaultDetected[ic + TOTAL_AD29] = true;
+            status = BMS_ERR_FAULT;
+        }
+
+        if (icTemp < MIN_IC_TEMP)
+        {
+            printfDma("IC UnderTemp Detected: SEG %d, %f \n", ic+1, icTemp);
+            ic_common.isFaultDetected[ic + TOTAL_AD29] = true;
+            status = BMS_ERR_FAULT;
+        }
+
+        return status;
+    }
+
+    return BMS_OK;
+}
+
 BMS_StatusTypeDef BMS_LoopActiveInit(void)
 {
-    bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-    bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+    printfDma("\n --- ACTIVE STATE --- \n");
+
+    bms_wakeupChain();                  // Wakeup needed every 4ms of Inactivity
+    bms_startAdcvCont(true);            // Need to wait 8ms for the average register to fill up
+    bms_delayMsActive(12);
+
+    return BMS_OK;
+}
+
+
+BMS_StatusTypeDef BMS_LoopChargingInit(void)
+{
+    printfDma("\n --- CHARGING STATE --- \n");
+    return BMS_OK;
+}
+
+BMS_StatusTypeDef BMS_LoopIdleInit(void)
+{
+    printfDma("\n --- IDLE STATE --- \n");
+
+    bms_wakeupChain();
+    bms_startAdcvCont(false);
     bms_delayMsActive(12);
 
     return BMS_OK;
@@ -1052,12 +1200,27 @@ BMS_StatusTypeDef BMS_LoopActive(void)
 
 BMS_StatusTypeDef BMS_LoopCharging(void)
 {
-    return 0;
+    return BMS_OK;
 }
 
-BMS_StatusTypeDef BMS_LoopIDLE(void)
+BMS_StatusTypeDef BMS_LoopIdle(void)
 {
-    return 0;
+    bms_wakeupChain();
+    BMS_StatusTypeDef status;
+
+    if ((status = bms_readCellVoltage(VOLTAGE_C_FIL)))  return status; // For testing only
+    if ((status = bms_balancingMeasureVoltage()))   return status;
+
+    if ((status = bms_getAuxMeasurement())) return status; // around 40 ms
+
+    if ((status = bms29_readVB()))      return status;
+    if ((status = bms29_readCurrent())) return status;
+
+    // Only balancing if status is OK
+    if ((status = bms_checkStatus())) return status;
+    bms_startBalancing(balancingThreshold);
+
+    return BMS_OK;
 }
 
 
