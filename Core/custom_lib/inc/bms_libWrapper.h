@@ -38,11 +38,11 @@ void bms68_setGpo45(uint8_t twoBitIndex);
 
 void bms_startAdcvCont(void);
 
-uint8_t bms_readCellVoltage(VoltageTypes voltageType);
+BMS_StatusTypeDef bms_readCellVoltage(VoltageTypes voltageType);
 
-uint8_t bms_readRegister(RegisterTypes regTypes);
+BMS_StatusTypeDef bms_readRegister(RegisterTypes regTypes);
 
-void bms_getAuxMeasurement(void);
+BMS_StatusTypeDef bms_getAuxMeasurement(void);
 
 void bms_startDischarge(float threshold);
 
@@ -50,9 +50,9 @@ void bms_stopDischarge(void);
 
 void bms_softReset(void);
 
-void bms29_readVB(void);
+BMS_StatusTypeDef bms29_readVB(void);
 
-void bms29_readCurrent(void);
+BMS_StatusTypeDef bms29_readCurrent(void);
 
 void bms_balancingMeasureVoltage(void);
 
@@ -60,8 +60,9 @@ void bms_startBalancing(float deltaThreshold);
 
 void BMS_GetCanData(CanTxMsg** buff, uint32_t* len);
 
-uint32_t BMS_LoopActive(void);
-uint32_t BMS_LoopCharging(void);
-uint32_t BMS_LoopIDLE(void);
+BMS_StatusTypeDef BMS_LoopActiveInit(void);
+BMS_StatusTypeDef BMS_LoopActive(void);
+BMS_StatusTypeDef BMS_LoopCharging(void);
+BMS_StatusTypeDef BMS_LoopIDLE(void);
 
 

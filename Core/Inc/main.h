@@ -40,6 +40,13 @@ extern "C" {
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
 
+typedef enum {
+    BMS_OK = 0,
+    BMS_ERR_COMMS = -1,
+    BMS_ERR_FAULT = 1,
+} BMS_StatusTypeDef;
+
+
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
@@ -57,7 +64,7 @@ extern FDCAN_HandleTypeDef hfdcan2;
 /* USER CODE BEGIN EM */
 #define TOTAL_CELL      16
 #define TOTAL_AD68      1
-#define TOTAL_AD29      1
+#define TOTAL_AD29      0
 #define TOTAL_IC        (TOTAL_AD29 + TOTAL_AD68)
 
 #define BIT_SET(byte,nbit)   ((byte) |=  (UINT32_C(1) << (nbit)))
@@ -66,14 +73,16 @@ extern FDCAN_HandleTypeDef hfdcan2;
 #define BIT_FLIP(byte,nbit)  ((byte) ^=  (UINT32_C(1) << (nbit)))
 
 
-
-
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+
+void BMS_FaultCommsHandler(void);
+
+void BMS_FaultHandler(void);
 
 /* USER CODE END EFP */
 

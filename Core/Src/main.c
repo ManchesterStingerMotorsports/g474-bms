@@ -186,6 +186,7 @@ int main(void)
 
             if (bmsState == ACTIVE)
             {
+                BMS_LoopActiveInit();
                 // Measure the current cell voltage first
 //                printfDma("Measuring Cell Voltage: \n");
 //                bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
@@ -220,60 +221,60 @@ int main(void)
         {
         case ACTIVE:
 
-//            BMS_LoopActive();
-//            BMS_LoopCharging();
-//            BMS_LoopIDLE();
-
             timeStart = getRuntimeMs();
 
-            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-            bms_delayMsActive(12);
-            bms_readCellVoltage(VOLTAGE_C_FIL);
-            bms_readCellVoltage(VOLTAGE_S);
-
-            HAL_Delay(100);
-            bms_wakeupChain();
-            printfDma("======== C VOLTAGE MEASUREMENT ======== \n");
-            for (int i = 0; i < 1; i++)
+            if (BMS_LoopActive() == BMS_ERR_COMMS)
             {
-                bms_readCellVoltage(VOLTAGE_C_FIL);
-                bms_delayMsActive(50);
+                BMS_FaultCommsHandler();
             }
-            printfDma("======================================= \n\n");
 
-            bms_wakeupChain();
-            printfDma("Single Shot S Voltage (PWM Interrupted): \n");
-            bms_balancingMeasureVoltage();
-
-
-            printfDma("Temp Measurements: \n");
-            bms_getAuxMeasurement();
-
-////            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-////            bms_delayMsActive(12);
+//            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+//            bms_delayMsActive(12);
+//            bms_readCellVoltage(VOLTAGE_C_FIL);
+//            bms_readCellVoltage(VOLTAGE_S);
+//
+//            HAL_Delay(100);
+//            bms_wakeupChain();
+//            printfDma("======== C VOLTAGE MEASUREMENT ======== \n");
+//            for (int i = 0; i < 1; i++)
+//            {
+//                bms_readCellVoltage(VOLTAGE_C_FIL);
+//                bms_delayMsActive(50);
+//            }
+//            printfDma("======================================= \n\n");
 //
 //            bms_wakeupChain();
-//            bms_startBalancing(deltaThreshold);
-//            HAL_Delay(500);
+//            printfDma("Single Shot S Voltage (PWM Interrupted): \n");
+//            bms_balancingMeasureVoltage();
 //
+//
+//            printfDma("Temp Measurements: \n");
+//            bms_getAuxMeasurement();
+//
+//////            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+//////            bms_delayMsActive(12);
+////
 ////            bms_wakeupChain();
-////            bms_readRegister(REG_SID);
-
-            bms_wakeupChain();
-            bms29_readVB();
-            bms29_readCurrent();
-
-            CanTxMsg *msgArr = NULL;
-            uint32_t len = 0;
-            BMS_GetCanData(&msgArr, &len);
-            BMS_CAN_SendBuffer(msgArr, len);
-
-            HAL_Delay(1000);
-
+////            bms_startBalancing(deltaThreshold);
+////            HAL_Delay(500);
+////
+//////            bms_wakeupChain();
+//////            bms_readRegister(REG_SID);
+//
+//            bms_wakeupChain();
+//            bms29_readVB();
+//            bms29_readCurrent();
+//
+//            CanTxMsg *msgArr = NULL;
+//            uint32_t len = 0;
+//            BMS_GetCanData(&msgArr, &len);
+//            BMS_CAN_SendBuffer(msgArr, len);
+//
+//            HAL_Delay(1000);
+//
             timeDiff = getRuntimeMsDiff(timeStart);
             printfDma("Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
-
             break;
 
         case INACTIVE:
@@ -286,7 +287,7 @@ int main(void)
             break;
         }
 
-        HAL_Delay(1);
+        HAL_Delay(100);
 
     /* USER CODE END WHILE */
 
@@ -399,6 +400,7 @@ void BMS_FaultCommsHandler(void)
     // Add Error Counter
     //
     //
+    printfDma("COMMS ERROR \n");
 }
 
 void BMS_FaultHandler(void)

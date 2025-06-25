@@ -328,7 +328,7 @@ bool bms_checkRxFault(uint8_t data[TOTAL_IC][DATA_LEN], uint16_t pec[TOTAL_IC], 
 
 
 // used mostly for debugging purposes
-uint8_t bms_readRegister(RegisterTypes regType)
+BMS_StatusTypeDef bms_readRegister(RegisterTypes regType)
 {
     char* title;
     uint8_t* cmd;
@@ -362,12 +362,13 @@ uint8_t bms_readRegister(RegisterTypes regType)
     bms_receiveData(cmd, rxData, rxPec, rxCc);
     if (bms_checkRxFault(rxData, rxPec, rxCc))
     {
-        return -1;
+        return BMS_ERR_COMMS;
     }
 
     printfDma("%s: \n", title);
     bms_printRawData(rxData, rxCc);
-    return 0;
+
+    return BMS_OK;
 }
 
 
@@ -395,6 +396,7 @@ void bms_startAdcvCont(void)
 void bms_parseVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_IC][TOTAL_CELL], uint8_t register_index)
 {
     // Does not take care of 2950
+
     for (int ic = 1; ic < TOTAL_IC; ic++)
     {
         uint8_t cell_index = (register_index * 3);
@@ -415,6 +417,7 @@ void bms_parseVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_IC][
 void bms_parseAuxVoltage(uint8_t const rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_AD68][TOTAL_CELL], uint8_t cell_index, uint8_t muxIndex)
 {
     // Does not take care of 2950
+
     for (int ic = 1; ic < TOTAL_IC; ic++)
     {
         if (cell_index == 4)
@@ -573,7 +576,7 @@ uint8_t* readCellVoltageCmdList[TOTAL_VOLTAGE_TYPES][6] = {
         {} // VOLTAGE_TEMP
 };
 
-uint8_t bms_readCellVoltage(VoltageTypes voltageType)
+BMS_StatusTypeDef bms_readCellVoltage(VoltageTypes voltageType)
 {
     uint8_t** cmdList = readCellVoltageCmdList[voltageType];
 
@@ -582,14 +585,15 @@ uint8_t bms_readCellVoltage(VoltageTypes voltageType)
         bms_receiveData(cmdList[i], rxData, rxPec, rxCc);
         if (bms_checkRxFault(rxData, rxPec, rxCc))
         {
-            return -1;
+            return BMS_ERR_COMMS;
         }
         bms_parseVoltage(rxData, ic_ad68.v_cell[voltageType], i);
     }
 
     bms_calculateStats(voltageType);
     bms_printVoltage(voltageType);
-    return 0;
+
+    return BMS_OK;
 }
 
 
@@ -651,7 +655,7 @@ void bms_parseTemps(void)
 }
 
 
-void bms_getAuxMeasurement(void)
+BMS_StatusTypeDef bms_getAuxMeasurement(void)
 {
     /*
      *  GPO4 = Mux switch
@@ -673,7 +677,7 @@ void bms_getAuxMeasurement(void)
     bms_transmitPoll(PLAUX1);
     if (bms_getAuxVoltage(1))           // Has to be 1 first due to the mux switching
     {
-        return;
+        return BMS_ERR_COMMS;
     }
     bms68_setGpo45(0b00);           // Switch to the other Mux Channel
     bms_delayMsActive(1);           // Small delay for switching
@@ -682,7 +686,7 @@ void bms_getAuxMeasurement(void)
     bms_transmitPoll(PLAUX1);
     if (bms_getAuxVoltage(0))
     {
-        return;
+        return BMS_ERR_COMMS;
     }
     bms68_setGpo45(0b11);           // Reset to default
 
@@ -694,6 +698,8 @@ void bms_getAuxMeasurement(void)
 //    uint32_t time = bms_getTimCount();
 //    bms_stopTimer();
 //    printfDma("PT: %ld us\n", time);
+
+    return BMS_OK;
 }
 
 
@@ -858,27 +864,28 @@ void bms_softReset(void)
     printfDma("\n  ---  SOFT RESET  ---  \n");
 }
 
-
-void bms29_readVB(void)
+BMS_StatusTypeDef bms29_readVB(void)
 {
     bms_receiveData(RDVB, rxData, rxPec, rxCc);
     if (bms_checkRxFault(rxData, rxPec, rxCc))
     {
-        return;
+        return BMS_ERR_COMMS;
     }
     ic_ad29.vb1 = *((int16_t *)(rxData[0] + 2)) *  0.000100 * 396.604395604;
     ic_ad29.vb2 = *((int16_t *)(rxData[0] + 4)) * -0.000085 * 751;
     printfDma("VB: %fV, %fV  \n\n", ic_ad29.vb1, ic_ad29.vb2);
+
+    return BMS_OK;
 }
 
 
 
-void bms29_readCurrent(void)
+BMS_StatusTypeDef bms29_readCurrent(void)
 {
     bms_receiveData(RDI, rxData, rxPec, rxCc);
     if (bms_checkRxFault(rxData, rxPec, rxCc))
     {
-        return;
+        return BMS_ERR_COMMS;
     }
 //    bms_printRawData(rxData, rxCc);
 
@@ -898,6 +905,8 @@ void bms29_readCurrent(void)
     ic_ad29.current2 = ((float)i2v / 1000000.0f) / SHUNT_RESISTANCE;
 
     printfDma("Current: %fA, %fA  \n\n", ic_ad29.current1 , ic_ad29.current2);
+
+    return BMS_OK;
 }
 
 
@@ -1004,17 +1013,34 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
     *buff = canTxBuffer;
 }
 
-uint32_t BMS_LoopActive(void)
+BMS_StatusTypeDef BMS_LoopActiveInit(void)
+{
+    bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
+    bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+    bms_delayMsActive(12);
+
+    return BMS_OK;
+}
+
+
+BMS_StatusTypeDef BMS_LoopActive(void)
+{
+    bms_wakeupChain();
+    BMS_StatusTypeDef status;
+    if ((status = bms_readCellVoltage(VOLTAGE_C_FIL)))  return status;
+    if ((status = bms_readCellVoltage(VOLTAGE_S)))      return status;
+
+    if ((status = bms29_readVB()))      return status;
+    if ((status = bms29_readCurrent())) return status;
+    return BMS_OK;
+}
+
+BMS_StatusTypeDef BMS_LoopCharging(void)
 {
     return 0;
 }
 
-uint32_t BMS_LoopCharging(void)
-{
-    return 0;
-}
-
-uint32_t BMS_LoopIDLE(void)
+BMS_StatusTypeDef BMS_LoopIDLE(void)
 {
     return 0;
 }
