@@ -123,7 +123,6 @@ void BMS_CAN_Test(void)
 }
 
 
-
 void BMS_CAN_SendMsg(CanTxMsg msg)
 {
     if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &msg.header, msg.data) != HAL_OK)
@@ -134,15 +133,11 @@ void BMS_CAN_SendMsg(CanTxMsg msg)
 }
 
 
-
-
-
-
 void HAL_FDCAN_TxFifoEmptyCallback(FDCAN_HandleTypeDef *hfdcan)
 {
     if (hfdcan == &hfdcan1)
     {
-        if (txBufferTailIndex >= txBufferHeadIndex)
+        if (txBufferTailIndex >= txBufferHeadIndex || isBufferTransmitting == false)
         {
             isBufferTransmitting = false;
             return;
@@ -155,6 +150,15 @@ void HAL_FDCAN_TxFifoEmptyCallback(FDCAN_HandleTypeDef *hfdcan)
 }
 
 
+void static CAN_AbortTx()
+{
+    HAL_FDCAN_AbortTxRequest(&hfdcan1, FDCAN_TX_BUFFER0);
+    HAL_FDCAN_AbortTxRequest(&hfdcan1, FDCAN_TX_BUFFER1);
+    HAL_FDCAN_AbortTxRequest(&hfdcan1, FDCAN_TX_BUFFER2);
+}
+
+
+
 void BMS_CAN_SendBuffer(CanTxMsg* msgArr, uint32_t len)
 {
     if (len > BUFFER_LEN)
@@ -162,12 +166,14 @@ void BMS_CAN_SendBuffer(CanTxMsg* msgArr, uint32_t len)
         printfDma("Error CANTX: len larger than buffer \n");
         return;
     }
+
     if (isBufferTransmitting)
     {
+        isBufferTransmitting = false;       // Disable recursive callback in case some are still being sent
+        CAN_AbortTx();
         printfDma("Error CANTX: previous buffer tx overwritten \n");
     }
 
-    isBufferTransmitting = false;       // Disable recursive callback in case some are still being sent
     memcpy(txBuffer, msgArr, len * sizeof(CanTxMsg));
     txBufferHeadIndex = len;
     txBufferTailIndex = 0;
@@ -175,6 +181,7 @@ void BMS_CAN_SendBuffer(CanTxMsg* msgArr, uint32_t len)
 
     recursiveTransmit();
 }
+
 
 
 

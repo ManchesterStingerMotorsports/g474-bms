@@ -81,9 +81,7 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 
-void BMS_FaultCommsHandler(void);
 
-void BMS_FaultHandler(void);
 
 /* USER CODE END EFP */
 

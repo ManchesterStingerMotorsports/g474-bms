@@ -120,7 +120,7 @@ uint8_t  rxCc[TOTAL_IC];
 VoltageTypes dischargeVoltageType = VOLTAGE_S;
 
 #define CAN_BUFFER_LEN (7 * 16 + 32)       // TODO: Accurate buffer size
-CanTxMsg canTxBuffer[CAN_BUFFER_LEN];
+CanTxMsg canTxBuffer[CAN_BUFFER_LEN] = {0};
 
 const float balancingThreshold = 0.002; // Volts
 
@@ -277,12 +277,12 @@ bool bms_checkRxFault(uint8_t data[TOTAL_IC][DATA_LEN], uint16_t pec[TOTAL_IC], 
     bool faultDetected = false;
     bool* errorIndex = ic_common.isCommsError;
 
-    if (!bms_checkRxPec(data, pec, cc, errorIndex))
+    if (bms_checkRxPec(data, pec, cc, errorIndex))
     {
         printfDma("WARNING! PEC ERROR - IC:");
         for(int ic = 0; ic < TOTAL_IC; ic++)
         {
-            if (!errorIndex[ic])
+            if (errorIndex[ic])
             {
                 printfDma(" %d,", ic+1);
             }
@@ -805,6 +805,7 @@ void bms_startDischarge(float dischargeThreshold)
             }
             else
             {
+                BIT_CLEAR(ic_ad68.isDischarging[ic], c);
                 bms_setPwm(ic, c, 0b0000);    // Turn off PWM discharge for that cell
             }
         }
@@ -951,13 +952,12 @@ void bms_startBalancing(float deltaThreshold)
 
 void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
 {
-    *len = 0;
+    uint32_t bufferlen = 0;
     uint32_t id = BASE_CAN_ID;
     FDCAN_TxHeaderTypeDef txHeader;
 
     /* Prepare Tx Header */
     txHeader.Identifier = id;
-
     txHeader.IdType = FDCAN_EXTENDED_ID;
     txHeader.TxFrameType = FDCAN_DATA_FRAME;
     txHeader.DataLength = 8;
@@ -967,56 +967,76 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
     txHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
     txHeader.MessageMarker = 0;
 
-    int16_t cellVoltage = 0;
-    int16_t cellTemp = 0;
-    uint8_t txData[8] = {0};
-    uint8_t isDischarging = false;
-    uint8_t isFaultDetected = false;
-    int32_t packVoltage = 0;
-    uint32_t packCurrent = (ic_ad29.current1 + ic_ad29.current2) * 1000 / 2;
-
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
+        int32_t v_segment       = ic_ad68.v_segment[ic];
+        int16_t temp_ic         = ic_ad68.temp_ic[ic];
+        uint8_t isCommsError    = ic_common.isCommsError[ic];
+        uint8_t isFaultDetected = ic_common.isFaultDetected[ic];
+
+        memcpy(&canTxBuffer[bufferlen].data[0], &v_segment, 4);
+        memcpy(&canTxBuffer[bufferlen].data[4], &temp_ic, 2);
+        canTxBuffer[bufferlen].data[5] = (uint8_t)((isCommsError << 0) | (isFaultDetected << 1));
+
+        txHeader.Identifier = BASE_CAN_ID + 7*TOTAL_CELL + ic;
+        canTxBuffer[bufferlen].header = txHeader;
+        bufferlen++;
+
+        if (isCommsError)
+        {
+            continue; // Does not send cell voltage and temp as its invalid
+        }
+
         for (int c = 0; c < TOTAL_CELL; c++)
         {
-            cellVoltage = (int16_t)(ic_ad68.v_cell[VOLTAGE_S][ic][c] * 1000);
-            cellTemp    = (int16_t)(ic_ad68.temp_cell[ic][c] * 100);
-            isDischarging = ((ic_ad68.isDischarging[ic] >> 1U) & 0x01);
+            int16_t cellVoltage = (int16_t)(ic_ad68.v_cell[dischargeVoltageType][ic][c] * 1000);
+            int16_t cellTemp    = (int16_t)(ic_ad68.temp_cell[ic][c] * 100);
+            uint8_t isDischarging       = ((ic_ad68.isDischarging[ic]       >> c) & 0x01U);
+            uint8_t isCellFaultDetected = ((ic_ad68.isCellFaultDetected[ic] >> c) & 0x01U);
 
-            packVoltage += (cellVoltage * 1000);
+            canTxBuffer[bufferlen].data[0] = (uint8_t)(cellVoltage & 0xFF);
+            canTxBuffer[bufferlen].data[1] = (uint8_t)((cellVoltage >> 8) & 0xFF);
+            canTxBuffer[bufferlen].data[2] = (uint8_t)(cellTemp & 0xFF);
+            canTxBuffer[bufferlen].data[3] = (uint8_t)((cellTemp >> 8) & 0xFF);
+            canTxBuffer[bufferlen].data[4] = (uint8_t)((isDischarging << 0) | (isCellFaultDetected << 1));
 
-            txData[0] = (uint8_t)(cellVoltage & 0xFF);
-            txData[1] = (uint8_t)((cellVoltage >> 8) & 0xFF);
-            txData[2] = (uint8_t)(cellTemp & 0xFF);
-            txData[3] = (uint8_t)((cellTemp >> 8) & 0xFF);
-            txData[4] = (uint8_t)((isDischarging << 0) | (isFaultDetected << 1));
+            uint32_t id_cell_offset = ic*TOTAL_CELL + c;
 
-            uint32_t id_offset = ic*TOTAL_CELL + c;
-
-            memcpy(canTxBuffer[id_offset].data, txData, 8);
-            txHeader.Identifier = id + id_offset;
-            canTxBuffer[id_offset].header = txHeader;
-
-            *len += 1;
+            txHeader.Identifier = id + id_cell_offset;
+            canTxBuffer[bufferlen].header = txHeader;
+            bufferlen++;
         }
     }
 
-    uint32_t packOffset = TOTAL_AD68*TOTAL_CELL;
+    if (TOTAL_AD29)
+    {
+        uint8_t isCommsError    = ic_common.isCommsError[0];
+        uint8_t isFaultDetected = ic_common.isFaultDetected[0];
 
-    canTxBuffer[packOffset].data[0] = (packVoltage >> 0)  & 0xFF;
-    canTxBuffer[packOffset].data[1] = (packVoltage >> 8)  & 0xFF;
-    canTxBuffer[packOffset].data[2] = (packVoltage >> 16) & 0xFF;
-    canTxBuffer[packOffset].data[3] = (packVoltage >> 24) & 0xFF;
+        canTxBuffer[bufferlen].data[0] = (uint8_t)((isCommsError << 0) | (isFaultDetected << 1));
+        txHeader.Identifier = BASE_CAN_ID + 7*TOTAL_CELL + 7 + 1;
+        canTxBuffer[bufferlen].header = txHeader;
+        bufferlen++;
 
-    canTxBuffer[packOffset].data[4] = (packCurrent >> 0)  & 0xFF;
-    canTxBuffer[packOffset].data[5] = (packCurrent >> 8)  & 0xFF;
-    canTxBuffer[packOffset].data[6] = (packCurrent >> 16) & 0xFF;
-    canTxBuffer[packOffset].data[7] = (packCurrent >> 24) & 0xFF;
+        if (!isFaultDetected)
+        {
+            int32_t packVoltage     = (ic_ad29.vb1 + ic_ad29.vb2) * 1000 / 2;
+            int16_t packCurrent     = (ic_ad29.current1 + ic_ad29.current2) * 100 / 2;
 
-    txHeader.Identifier = BASE_CAN_ID + 7*TOTAL_CELL;
-    canTxBuffer[packOffset].header = txHeader;
+            canTxBuffer[bufferlen].data[0] = (packVoltage >> 0)  & 0xFF;
+            canTxBuffer[bufferlen].data[1] = (packVoltage >> 8)  & 0xFF;
+            canTxBuffer[bufferlen].data[2] = (packVoltage >> 16) & 0xFF;
+            canTxBuffer[bufferlen].data[3] = (packVoltage >> 24) & 0xFF;
 
-    *len += 1;
+            canTxBuffer[bufferlen].data[4] = (packCurrent >> 0)  & 0xFF;
+            canTxBuffer[bufferlen].data[5] = (packCurrent >> 8)  & 0xFF;
+
+            txHeader.Identifier = BASE_CAN_ID + 7*TOTAL_CELL + 7;
+            canTxBuffer[bufferlen].header = txHeader;
+            bufferlen++;
+        }
+    }
+    *len = bufferlen;
     *buff = canTxBuffer;
 }
 
@@ -1195,6 +1215,7 @@ BMS_StatusTypeDef BMS_LoopActive(void)
     if ((status = bms29_readVB()))      return status;
     if ((status = bms29_readCurrent())) return status;
 
+//    if ((status = bms_checkStatus())) return status;
     return BMS_OK;
 }
 
@@ -1217,7 +1238,7 @@ BMS_StatusTypeDef BMS_LoopIdle(void)
     if ((status = bms29_readCurrent())) return status;
 
     // Only balancing if status is OK
-    if ((status = bms_checkStatus())) return status;
+//    if ((status = bms_checkStatus())) return status;
     bms_startBalancing(balancingThreshold);
 
     return BMS_OK;

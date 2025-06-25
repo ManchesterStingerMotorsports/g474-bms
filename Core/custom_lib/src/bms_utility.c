@@ -177,20 +177,21 @@ void static bms_spiReceiveData(uint8_t rxData[TOTAL_IC][DATA_LEN], uint16_t rxPe
 
 bool bms_checkRxPec(uint8_t rxData[TOTAL_IC][DATA_LEN], uint16_t rxPec[TOTAL_IC], uint8_t rxCc[TOTAL_IC], bool errorIndex[TOTAL_IC])
 {
-    bool pecOK = true;
+    bool error = false;
 
     for (int ic = 0; ic < TOTAL_IC; ic++)
     {
         uint16_t calculated_pec = bms_calcPec10(rxData[ic], DATA_LEN, rxCc + ic);
 
-        errorIndex[ic] = true;                          // True == PEC OK
+        errorIndex[ic] = false;                          // True == PEC OK
         if (calculated_pec != rxPec[ic])
         {
-            errorIndex[ic] = false;                     // Store the error location
-            pecOK = false;                              // Return False to indicate PEC Error
+            errorIndex[ic] = true;                     // Store the error location
+            error = true;                              // Return False to indicate PEC Error
         }
     }
-    return pecOK;
+
+    return error;
 }
 
 

@@ -86,7 +86,8 @@ void SystemClock_Config(void);
 uint32_t getRuntimeMs(void);
 uint32_t getRuntimeMsDiff(uint32_t startTime);
 
-
+void BMS_WriteFaultSignal(bool state);
+void BMS_FaultHandler(BMS_StatusTypeDef status);
 
 /* USER CODE END PFP */
 
@@ -94,7 +95,8 @@ uint32_t getRuntimeMsDiff(uint32_t startTime);
 /* USER CODE BEGIN 0 */
 
 volatile uint32_t runtime_sec = 0;
-volatile uint32_t commsError_counter = 0;
+volatile uint32_t counter_commsError = 0;
+volatile uint32_t counter_commsErrorCumulative = 0;
 
 /* USER CODE END 0 */
 
@@ -149,11 +151,14 @@ int main(void)
     HAL_GPIO_WritePin(BMS_MSTR_GPIO_Port, BMS_MSTR_Pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(BMS_MSTR2_GPIO_Port, BMS_MSTR2_Pin, GPIO_PIN_SET);
 
-    // Start Timer16
-    HAL_TIM_Base_Start_IT(&htim16);
+    // Fault By Default
+    BMS_WriteFaultSignal(true);
 
     // Configure FDCAN
     BMS_CAN_Config();
+
+    // Start Timer16
+    HAL_TIM_Base_Start_IT(&htim16);
 
 //    // Initialise BMS configs (No commands sent)
 //    bms_init();
@@ -164,6 +169,7 @@ int main(void)
     printfDma("\n\n +++++             PROGRAM START             +++++ \n\n");
     bms_softReset();
     HAL_Delay(500);         // Initialisation delay
+
 
     bmsState = STATE_INIT;
     bmsPrevState = STATE_INIT;
@@ -189,6 +195,7 @@ int main(void)
                 break;
             case STATE_CHARGING:
                 BMS_LoopChargingInit();
+                break;
             default:
                 bms_stopDischarge();
                 bmsState = STATE_INIT;
@@ -198,72 +205,31 @@ int main(void)
         }
 
         timeStart = getRuntimeMs();
+        BMS_StatusTypeDef status;
 
         switch(bmsCurrState)
         {
         case STATE_ACTIVE:
-            if (BMS_LoopActive() == BMS_ERR_COMMS)
-            {
-                BMS_FaultCommsHandler();
-            }
+            status = BMS_LoopActive();
+            BMS_FaultHandler(status);
             HAL_Delay(500);
-
-//            bms_wakeupChain();              // Wakeup needed every 4ms of Inactivity
-//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-//            bms_delayMsActive(12);
-//            bms_readCellVoltage(VOLTAGE_C_FIL);
-//            bms_readCellVoltage(VOLTAGE_S);
-//
-//            HAL_Delay(100);
-//            bms_wakeupChain();
-//            printfDma("======== C VOLTAGE MEASUREMENT ======== \n");
-//            for (int i = 0; i < 1; i++)
-//            {
-//                bms_readCellVoltage(VOLTAGE_C_FIL);
-//                bms_delayMsActive(50);
-//            }
-//            printfDma("======================================= \n\n");
-//
-//            bms_wakeupChain();
-//            printfDma("Single Shot S Voltage (PWM Interrupted): \n");
-//            bms_balancingMeasureVoltage();
-//
-//
-//            printfDma("Temp Measurements: \n");
-//            bms_getAuxMeasurement();
-//
-//////            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
-//////            bms_delayMsActive(12);
-////
-////            bms_wakeupChain();
-////            bms_startBalancing(deltaThreshold);
-////            HAL_Delay(500);
-////
-//////            bms_wakeupChain();
-//////            bms_readRegister(REG_SID);
-//
-//            bms_wakeupChain();
-//            bms29_readVB();
-//            bms29_readCurrent();
-//
-//            CanTxMsg *msgArr = NULL;
-//            uint32_t len = 0;
-//            BMS_GetCanData(&msgArr, &len);
-//            BMS_CAN_SendBuffer(msgArr, len);
-//
-//            HAL_Delay(1000);
-//
             break;
 
-
         case STATE_IDLE:
-            BMS_LoopIdle();
+            status = BMS_LoopIdle();
+            BMS_FaultHandler(status);
             HAL_Delay(900);
             break;
 
         default:
             HAL_Delay(1000);
             break;
+        }
+
+        if (status == BMS_OK)
+        {
+            // Everything is OK, so disable the fault signal
+            BMS_WriteFaultSignal(false);
         }
 
         timeDiff = getRuntimeMsDiff(timeStart);
@@ -341,6 +307,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         // if OK, get can data
         // send CAN messages
 
+        CanTxMsg *msgArr = NULL;
+        uint32_t len = 0;
+        BMS_GetCanData(&msgArr, &len);
+        BMS_CAN_SendBuffer(msgArr, len);
     }
 }
 
@@ -376,22 +346,46 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 }
 
 
-void BMS_FaultCommsHandler(void)
+
+void BMS_WriteFaultSignal(bool state)
 {
-    // Reset
-    // wait 200 ms
-    // Retry Comms
-    // if 3 times, open relay
-    // Repeat
-    // Add Error Counter
-    //
-    //
-    commsError_counter++;
+    HAL_GPIO_WritePin(FAULT_CTRL_GPIO_Port, FAULT_CTRL_Pin, state); // If mosfet is ON, Fault == TRUE
 }
 
-void BMS_FaultHandler(void)
-{
 
+void BMS_FaultHandler(BMS_StatusTypeDef status)
+{
+    switch (status)
+    {
+    case BMS_OK:
+        break;
+
+    case BMS_ERR_COMMS:
+        counter_commsError = 0;
+        do
+        {
+            counter_commsError++;
+            counter_commsErrorCumulative++;
+            if (counter_commsError > 4)
+            {
+                BMS_WriteFaultSignal(true);
+            }
+            bms_softReset();
+            HAL_Delay(250);
+            bms_wakeupChain();
+        }
+        while (bms_readRegister(REG_SID) != BMS_OK);
+
+        bmsPrevState = STATE_INIT; // After comms is OK, return as if state just transitioning to the current state
+        break;
+
+    case BMS_ERR_FAULT:
+        BMS_WriteFaultSignal(true);
+        break;
+
+    default:
+        break;
+    }
 }
 
 
