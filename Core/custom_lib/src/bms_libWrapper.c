@@ -381,7 +381,7 @@ void bms_startAdcvCont(void)
     // If RD = 1 and CONT = 1, PWM discharge stopped
 
     ADCV.CONT = 1;      // Continuous
-    ADCV.RD   = 0;      // Redundant Measurement
+    ADCV.RD   = 1;      // Redundant Measurement
     ADCV.DCP  = 0;      // Discharge permitted
     ADCV.RSTF = 1;      // Reset filter
     ADCV.OW   = 0b00;   // Open wire on C-ADCS and S-ADCs
@@ -397,13 +397,13 @@ void bms_parseVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_IC][
 {
     // Does not take care of 2950
 
-    for (int ic = 1; ic < TOTAL_IC; ic++)
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
         uint8_t cell_index = (register_index * 3);
 
         for (int c = cell_index; c < (cell_index + 3); c++)
         {
-            vArr[ic-1][c] = *((int16_t *)(rawData[ic] + (c - cell_index)*2)) * 0.00015 + 1.5;
+            vArr[ic][c] = *((int16_t *)(rawData[ic + TOTAL_AD29] + (c - cell_index)*2)) * 0.00015 + 1.5;
 
             if (cell_index == 5)
             {
@@ -418,11 +418,11 @@ void bms_parseAuxVoltage(uint8_t const rawData[TOTAL_IC][DATA_LEN], float vArr[T
 {
     // Does not take care of 2950
 
-    for (int ic = 1; ic < TOTAL_IC; ic++)
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
         if (cell_index == 4)
         {
-            ic_ad68.temp_ic[ic-1] = (*((int16_t *)(rawData[ic] + 2)) * 0.00015 + 1.5) / 0.0075 - 273;
+            ic_ad68.temp_ic[ic] = (*((int16_t *)(rawData[ic + TOTAL_AD29] + 2)) * 0.00015 + 1.5) / 0.0075 - 273;
             continue;
         }
 
@@ -437,11 +437,11 @@ void bms_parseAuxVoltage(uint8_t const rawData[TOTAL_IC][DATA_LEN], float vArr[T
                 ci -= 2;
             }
 
-            vArr[ic-1][ci + 8*muxIndex] = *((int16_t *)(rawData[ic] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
+            vArr[ic][ci + 8*muxIndex] = *((int16_t *)(rawData[ic + TOTAL_AD29] + (c-cellArrIndex)*2)) * 0.00015 + 1.5;
 
             if (cell_index == 3)
             {
-                ic_ad68.v_segment[ic-1] = (*((int16_t *)(rawData[ic] + 4)) * 0.00015 + 1.5) * 25;
+                ic_ad68.v_segment[ic] = (*((int16_t *)(rawData[ic + TOTAL_AD29] + 4)) * 0.00015 + 1.5) * 25;
                 break;
             }
         }
@@ -670,8 +670,7 @@ BMS_StatusTypeDef bms_getAuxMeasurement(void)
     ADAX.PUP  = 0b0;
 
     //    bms_startTimer();
-
-    bms_wakeupChain();
+//    bms_wakeupChain();
 
     bms_transmitCmd((uint8_t *)&ADAX);
     bms_transmitPoll(PLAUX1);
@@ -866,15 +865,22 @@ void bms_softReset(void)
 
 BMS_StatusTypeDef bms29_readVB(void)
 {
-    bms_receiveData(RDVB, rxData, rxPec, rxCc);
-    if (bms_checkRxFault(rxData, rxPec, rxCc))
+    if (TOTAL_AD29)
     {
-        return BMS_ERR_COMMS;
-    }
-    ic_ad29.vb1 = *((int16_t *)(rxData[0] + 2)) *  0.000100 * 396.604395604;
-    ic_ad29.vb2 = *((int16_t *)(rxData[0] + 4)) * -0.000085 * 751;
-    printfDma("VB: %fV, %fV  \n\n", ic_ad29.vb1, ic_ad29.vb2);
+        bms_receiveData(RDVB, rxData, rxPec, rxCc);
+        if (bms_checkRxFault(rxData, rxPec, rxCc))
+        {
+            return BMS_ERR_COMMS;
+        }
 
+        ic_ad29.vb1 = *((int16_t *)(rxData[0] + 2)) *  0.000100 * 396.604395604;
+        ic_ad29.vb2 = *((int16_t *)(rxData[0] + 4)) * -0.000085 * 751;
+        printfDma("Pack Voltage: %fV, %fV  \n", ic_ad29.vb1, ic_ad29.vb2);
+    }
+    else
+    {
+        printfDma("Pack Voltage: (AD29 Disabled!) \n");
+    }
     return BMS_OK;
 }
 
@@ -882,30 +888,36 @@ BMS_StatusTypeDef bms29_readVB(void)
 
 BMS_StatusTypeDef bms29_readCurrent(void)
 {
-    bms_receiveData(RDI, rxData, rxPec, rxCc);
-    if (bms_checkRxFault(rxData, rxPec, rxCc))
+    if (TOTAL_AD29)
     {
-        return BMS_ERR_COMMS;
+        bms_receiveData(RDI, rxData, rxPec, rxCc);
+        if (bms_checkRxFault(rxData, rxPec, rxCc))
+        {
+            return BMS_ERR_COMMS;
+        }
+    //    bms_printRawData(rxData, rxCc);
+
+        // microvolts
+        int32_t i1v = 0;
+        int32_t i2v = 0;
+
+        i1v = ((uint32_t)rxData[0][0]) | ((uint32_t)rxData[0][1] << 8) | ((int32_t)rxData[0][2] << 16);
+        i2v = ((uint32_t)rxData[0][3]) | ((uint32_t)rxData[0][4] << 8) | ((int32_t)rxData[0][5] << 16);
+
+        if (i1v & (UINT32_C(1) << 23)) { i1v |= 0xFF000000; }; // Check the sign bit (24th bit) and extend the sign
+        if (i2v & (UINT32_C(1) << 23)) { i2v |= 0xFF000000; };
+
+        const float SHUNT_RESISTANCE = 0.000050; // 50 microOhms
+
+        ic_ad29.current1 = ((float)i1v / 1000000.0f) / SHUNT_RESISTANCE;
+        ic_ad29.current2 = ((float)i2v / 1000000.0f) / SHUNT_RESISTANCE;
+
+        printfDma("Current: %fA, %fA  \n", ic_ad29.current1 , ic_ad29.current2);
     }
-//    bms_printRawData(rxData, rxCc);
-
-    // microvolts
-    int32_t i1v = 0;
-    int32_t i2v = 0;
-
-    i1v = ((uint32_t)rxData[0][0]) | ((uint32_t)rxData[0][1] << 8) | ((int32_t)rxData[0][2] << 16);
-    i2v = ((uint32_t)rxData[0][3]) | ((uint32_t)rxData[0][4] << 8) | ((int32_t)rxData[0][5] << 16);
-
-    if (i1v & (UINT32_C(1) << 23)) { i1v |= 0xFF000000; }; // Check the sign bit (24th bit) and extend the sign
-    if (i2v & (UINT32_C(1) << 23)) { i2v |= 0xFF000000; };
-
-    const float SHUNT_RESISTANCE = 0.000050; // 50 microOhms
-
-    ic_ad29.current1 = ((float)i1v / 1000000.0f) / SHUNT_RESISTANCE;
-    ic_ad29.current2 = ((float)i2v / 1000000.0f) / SHUNT_RESISTANCE;
-
-    printfDma("Current: %fA, %fA  \n\n", ic_ad29.current1 , ic_ad29.current2);
-
+    else
+    {
+        printfDma("Current: (AD29 Disabled!) \n");
+    }
     return BMS_OK;
 }
 
@@ -1030,8 +1042,11 @@ BMS_StatusTypeDef BMS_LoopActive(void)
     if ((status = bms_readCellVoltage(VOLTAGE_C_FIL)))  return status;
     if ((status = bms_readCellVoltage(VOLTAGE_S)))      return status;
 
+    if ((status = bms_getAuxMeasurement())) return status; // around 40 ms
+
     if ((status = bms29_readVB()))      return status;
     if ((status = bms29_readCurrent())) return status;
+
     return BMS_OK;
 }
 

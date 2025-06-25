@@ -95,7 +95,7 @@ uint32_t getRuntimeMsDiff(uint32_t startTime);
 /* USER CODE BEGIN 0 */
 
 volatile uint32_t runtime_sec = 0;
-
+volatile uint32_t commsError_counter = 0;
 
 /* USER CODE END 0 */
 
@@ -180,9 +180,9 @@ int main(void)
 
         if (bmsPrevState != bmsCurrState)
         {
-            bms_wakeupChain();
-            bms_init();             // Initialise BMS configs and send them
-            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
+//            bms_wakeupChain();
+//            bms_init();             // Initialise BMS configs and send them
+//            bms_startAdcvCont();            // Need to wait 8ms for the average register to fill up
 
             if (bmsState == ACTIVE)
             {
@@ -274,7 +274,7 @@ int main(void)
 //            HAL_Delay(1000);
 //
             timeDiff = getRuntimeMsDiff(timeStart);
-            printfDma("Runtime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
+            printfDma("\nRuntime: %ld ms, CommandTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
             break;
 
         case INACTIVE:
@@ -400,7 +400,7 @@ void BMS_FaultCommsHandler(void)
     // Add Error Counter
     //
     //
-    printfDma("COMMS ERROR \n");
+    commsError_counter++;
 }
 
 void BMS_FaultHandler(void)
