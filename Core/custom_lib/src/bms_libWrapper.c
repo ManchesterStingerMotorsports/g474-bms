@@ -119,10 +119,10 @@ uint8_t  rxCc[TOTAL_IC];
 
 VoltageTypes dischargeVoltageType = VOLTAGE_S;
 
-#define CAN_BUFFER_LEN (7 * 16 + 32)       // TODO: Accurate buffer size
+#define CAN_BUFFER_LEN (7 * 16 + 32)                // TODO: Calculate accurate buffer size
 CanTxMsg canTxBuffer[CAN_BUFFER_LEN] = {0};
 
-const float balancingThreshold = 0.002; // Volts
+const float balancingThreshold = 0.010; // Volts
 
 
 void bms_resetConfig(void)
@@ -765,7 +765,7 @@ float bms_calculateBalancing(float deltaThreshold)
     }
     else
     {
-        return -1;  // No balancing needed
+        return 5;  // No balancing needed set the voltage threshold very high
     }
 }
 
@@ -941,11 +941,7 @@ BMS_StatusTypeDef bms_balancingMeasureVoltage(void)
 void bms_startBalancing(float deltaThreshold)
 {
     float dischargeThreshold = bms_calculateBalancing(deltaThreshold);
-
-    if (dischargeThreshold > 0)
-    {
-        bms_startDischarge(dischargeThreshold);
-    }
+    bms_startDischarge(dischargeThreshold);
 }
 
 
@@ -1215,7 +1211,7 @@ BMS_StatusTypeDef BMS_LoopActive(void)
     if ((status = bms29_readVB()))      return status;
     if ((status = bms29_readCurrent())) return status;
 
-//    if ((status = bms_checkStatus())) return status;
+    if ((status = bms_checkStatus())) return status;
     return BMS_OK;
 }
 
@@ -1238,7 +1234,7 @@ BMS_StatusTypeDef BMS_LoopIdle(void)
     if ((status = bms29_readCurrent())) return status;
 
     // Only balancing if status is OK
-//    if ((status = bms_checkStatus())) return status;
+    if ((status = bms_checkStatus())) return status;
     bms_startBalancing(balancingThreshold);
 
     return BMS_OK;

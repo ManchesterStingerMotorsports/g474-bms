@@ -218,7 +218,7 @@ int main(void)
         case STATE_IDLE:
             status = BMS_LoopIdle();
             BMS_FaultHandler(status);
-            HAL_Delay(900);
+            HAL_Delay(2000);
             break;
 
         default:
@@ -307,10 +307,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         // if OK, get can data
         // send CAN messages
 
-        CanTxMsg *msgArr = NULL;
-        uint32_t len = 0;
-        BMS_GetCanData(&msgArr, &len);
-        BMS_CAN_SendBuffer(msgArr, len);
+        if (bmsCurrState != STATE_INIT)
+        {
+            CanTxMsg *msgArr = NULL;
+            uint32_t len = 0;
+            BMS_GetCanData(&msgArr, &len);
+            BMS_CAN_SendBuffer(msgArr, len);
+        }
     }
 }
 
@@ -380,6 +383,7 @@ void BMS_FaultHandler(BMS_StatusTypeDef status)
         break;
 
     case BMS_ERR_FAULT:
+        bms_stopDischarge();
         BMS_WriteFaultSignal(true);
         break;
 
