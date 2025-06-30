@@ -309,6 +309,18 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 
         if (bmsCurrState != STATE_INIT)
         {
+            uint16_t chargingTargetVoltage = 320;
+            uint16_t chargingMaxCurrent = 1;
+
+            if (bmsCurrState == STATE_IDLE)
+            {
+                BMS_ConfigCharger(chargingTargetVoltage, chargingMaxCurrent, true);
+            }
+            else
+            {
+                BMS_ConfigCharger(chargingTargetVoltage, chargingMaxCurrent, false);
+            }
+
             CanTxMsg *msgArr = NULL;
             uint32_t len = 0;
             BMS_GetCanData(&msgArr, &len);

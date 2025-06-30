@@ -39,10 +39,10 @@ void BMS_CAN_Config(void)
 //  /* Configure global filter:
 //     Filter all remote frames with STD and EXT ID
 //     Reject non matching frames with STD ID and EXT ID */
-    if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan1, FDCAN_REJECT, FDCAN_REJECT, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK)
-    {
-        Error_Handler();
-    }
+//    if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan1, FDCAN_REJECT, FDCAN_REJECT, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK)
+//    {
+//        Error_Handler();
+//    }
 
     /* Start the FDCAN module */
     if (HAL_FDCAN_Start(&hfdcan1) != HAL_OK)
@@ -55,6 +55,11 @@ void BMS_CAN_Config(void)
         Error_Handler();
     }
 
+
+    if (HAL_FDCAN_ActivateNotification(&hfdcan1, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
+    {
+        Error_Handler();
+    }
 
 }
 
@@ -180,6 +185,100 @@ void BMS_CAN_SendBuffer(CanTxMsg* msgArr, uint32_t len)
     isBufferTransmitting = true;
 
     recursiveTransmit();
+}
+
+ChargerStatus chargerStatus = {0};
+
+/**
+ * @brief Parses a CAN message received from the charger.
+ *
+ * This function decodes the data payload of a CAN message with the
+ * charger's status ID and populates a ChargerStatus struct.
+ * The data mapping is based on a common protocol:
+ * - Bytes 0-1: Output Voltage (0.1V/bit, little-endian)
+ * - Bytes 2-3: Output Current (0.1A/bit, little-endian)
+ * - Byte 4: Temperature (-40°C offset)
+ * - Byte 5: Status flags
+ *
+ * @param data can message data.
+ */
+void static parse_charger_status(uint8_t* data)
+{
+    // Unpack the data from the byte array.
+    // Voltage (2 bytes, little-endian, 0.1V resolution)
+    uint16_t raw_voltage = (data[1] << 8) | data[0];
+    chargerStatus.output_voltage = raw_voltage * 0.1f;
+
+    // Current (2 bytes, little-endian, 0.1A resolution)
+    uint16_t raw_current = (data[3] << 8) | data[2];
+    chargerStatus.output_current = raw_current * 0.1f;
+
+    // Temperature (1 byte, -40 degree offset)
+    chargerStatus.temperature = (int16_t)data[4] - 40;
+
+    // Status Flags (1 byte)
+    chargerStatus.hardware_fault        = (data[5] >> 0) & 0x01;
+    chargerStatus.over_temp_fault       = (data[5] >> 1) & 0x01;
+    chargerStatus.input_voltage_fault   = (data[5] >> 2) & 0x01;
+    chargerStatus.charging_state        = (data[5] >> 3) & 0x01;
+
+    return;
+}
+
+/**
+ * @brief Transmits a configuration message to the charger.
+ *
+ * This function takes charging parameters, packs them into a CAN message
+ * payload, and sends it using the defined charger configuration ID.
+ * The data mapping is based on a common protocol:
+ * - Bytes 0-1: Target Voltage (0.1V/bit, little-endian)
+ * - Bytes 2-3: Max Current (0.1A/bit, little-endian)
+ * - Byte 4: Charging Enable (0x00 = Disable, 0x01 = Enable)
+ */
+void BMS_CAN_GetChargerMsg(const ChargerConfiguration* config, uint8_t* data)
+{
+    // Pack Target Voltage (0.1V resolution)
+    uint16_t raw_voltage = (uint16_t)(config->target_voltage / 0.1f);
+    data[0] = (uint8_t)(raw_voltage & 0xFF);         // Low byte
+    data[1] = (uint8_t)((raw_voltage >> 8) & 0xFF);  // High byte
+
+    // Pack Max Current (0.1A resolution)
+    uint16_t raw_current = (uint16_t)(config->max_current / 0.1f);
+    data[2] = (uint8_t)(raw_current & 0xFF);         // Low byte
+    data[3] = (uint8_t)((raw_current >> 8) & 0xFF);  // High byte
+
+    // Pack Charging Enable flag
+    data[4] = config->enable_charging ? 0x01 : 0x00;
+
+    // Bytes 5, 6, 7 are unused but sent as 0.
+    data[5] = 0x00;
+    data[6] = 0x00;
+    data[7] = 0x00;
+
+    // Send the message over the CAN bus.
+    return;
+}
+
+
+
+
+
+void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
+{
+    if (hfdcan == &hfdcan1)
+    {
+        if (RxFifo0ITs == FDCAN_IT_RX_FIFO0_NEW_MESSAGE)
+        {
+            FDCAN_RxHeaderTypeDef rxHeader;
+            uint8_t rxData[8];
+            HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &rxHeader, rxData);
+
+            if (rxHeader.Identifier == CHARGER_STATUS_CAN_ID)
+            {
+                parse_charger_status(rxData);
+            }
+        }
+    }
 }
 
 

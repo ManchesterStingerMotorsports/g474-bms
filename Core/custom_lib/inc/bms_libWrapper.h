@@ -60,15 +60,18 @@ BMS_StatusTypeDef bms_balancingMeasureVoltage(void);
 
 void bms_startBalancing(float deltaThreshold);
 
+
+void BMS_ConfigCharger(uint16_t targetVoltage, uint16_t maxCurrent, bool enableCharging);
+
 void BMS_GetCanData(CanTxMsg** buff, uint32_t* len);
 
 
+
+// --- PROGRAM LOOP FUNCTIONS --- //
 BMS_StatusTypeDef BMS_LoopActiveInit(void);
 BMS_StatusTypeDef BMS_LoopActive(void);
-
 BMS_StatusTypeDef BMS_LoopChargingInit(void);
 BMS_StatusTypeDef BMS_LoopCharging(void);
-
 BMS_StatusTypeDef BMS_LoopIdleInit(void);
 BMS_StatusTypeDef BMS_LoopIdle(void);
 

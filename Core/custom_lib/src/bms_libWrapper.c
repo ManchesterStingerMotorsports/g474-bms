@@ -945,6 +945,16 @@ void bms_startBalancing(float deltaThreshold)
 }
 
 
+ChargerConfiguration chargerConfiguration;
+void BMS_ConfigCharger(uint16_t targetVoltage, uint16_t maxCurrent, bool enableCharging)
+{
+    // Charger Commands
+    chargerConfiguration.target_voltage = targetVoltage;
+    chargerConfiguration.max_current = maxCurrent;
+    chargerConfiguration.enable_charging = enableCharging;
+}
+
+
 
 void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
 {
@@ -1032,6 +1042,14 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
             bufferlen++;
         }
     }
+
+    // --- CHARGER CAN MESSAGE --- //
+    BMS_CAN_GetChargerMsg(&chargerConfiguration, canTxBuffer[bufferlen].data);
+    txHeader.Identifier = CHARGER_CONFIG_CAN_ID;
+    canTxBuffer[bufferlen].header = txHeader;
+    bufferlen++;
+
+
     *len = bufferlen;
     *buff = canTxBuffer;
 }
