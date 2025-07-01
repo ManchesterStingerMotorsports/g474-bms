@@ -124,6 +124,10 @@ CanTxMsg canTxBuffer[CAN_BUFFER_LEN] = {0};
 
 const float balancingThreshold = 0.010; // Volts
 
+volatile bool enableBalancing = false;
+volatile bool enableCharging = false;
+volatile bool newDataReady = false;
+
 
 void bms_resetConfig(void)
 {
@@ -219,7 +223,7 @@ void bms_writeRegister(RegisterTypes regType)
 }
 
 
-void bms_init(void)
+BMS_StatusTypeDef bms_init(void)
 {
     bms_resetConfig();
 
@@ -239,8 +243,19 @@ void bms_init(void)
         ic_ad68.cfa_Tx[ic].fc = 0b001;    // 110 Hz corner freq
     }
 
+    printfDma("\n --- BMS INIT --- \n");
+
+    bms_wakeupChain();                                  // Wakeup needed every 4ms of Inactivity
+    if (bms_readRegister(REG_SID) == BMS_ERR_COMMS)     // Make sure the comms is OK
+    {
+        return BMS_ERR_COMMS;
+    }
+
     bms_writeRegister(REG_CONFIG_A);
-    bms_readRegister(REG_SID);
+    bms_startAdcvCont(false);            // Need to wait 8ms for the average register to fill up
+    bms_delayMsActive(12);
+
+    return BMS_OK;
 }
 
 
@@ -854,6 +869,7 @@ void bms_softReset(void)
     printfDma("\n  ---  SOFT RESET  ---  \n");
 }
 
+
 BMS_StatusTypeDef bms29_readVB(void)
 {
     if (TOTAL_AD29)
@@ -955,7 +971,6 @@ void BMS_ConfigCharger(uint16_t targetVoltage, uint16_t maxCurrent, bool enableC
 }
 
 
-
 void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
 {
     uint32_t bufferlen = 0;
@@ -1043,7 +1058,7 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
         }
     }
 
-    // --- CHARGER CAN MESSAGE --- //
+    // --- CHARGER CONFIG CAN MESSAGE --- //
     BMS_CAN_GetChargerMsg(&chargerConfiguration, canTxBuffer[bufferlen].data);
     txHeader.Identifier = CHARGER_CONFIG_CAN_ID;
     canTxBuffer[bufferlen].header = txHeader;
@@ -1052,6 +1067,8 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
 
     *len = bufferlen;
     *buff = canTxBuffer;
+
+    newDataReady = false;
 }
 
 
@@ -1187,37 +1204,9 @@ BMS_StatusTypeDef bms_checkStatus(void)
     return BMS_OK;
 }
 
-BMS_StatusTypeDef BMS_LoopActiveInit(void)
-{
-    printfDma("\n --- ACTIVE STATE --- \n");
-
-    bms_wakeupChain();                  // Wakeup needed every 4ms of Inactivity
-    bms_startAdcvCont(true);            // Need to wait 8ms for the average register to fill up
-    bms_delayMsActive(12);
-
-    return BMS_OK;
-}
 
 
-BMS_StatusTypeDef BMS_LoopChargingInit(void)
-{
-    printfDma("\n --- CHARGING STATE --- \n");
-    return BMS_OK;
-}
-
-BMS_StatusTypeDef BMS_LoopIdleInit(void)
-{
-    printfDma("\n --- IDLE STATE --- \n");
-
-    bms_wakeupChain();
-    bms_startAdcvCont(false);
-    bms_delayMsActive(12);
-
-    return BMS_OK;
-}
-
-
-BMS_StatusTypeDef BMS_LoopActive(void)
+BMS_StatusTypeDef BMS_ProgramLoop(void)
 {
     bms_wakeupChain();
     BMS_StatusTypeDef status;
@@ -1229,33 +1218,43 @@ BMS_StatusTypeDef BMS_LoopActive(void)
     if ((status = bms29_readVB()))      return status;
     if ((status = bms29_readCurrent())) return status;
 
-    if ((status = bms_checkStatus())) return status;
-    return BMS_OK;
+    // Only balancing/charging if status is OK
+    status = bms_checkStatus();
+
+    if (enableBalancing && (status == BMS_OK))
+    {
+        bms_startBalancing(balancingThreshold);
+    }
+
+    uint16_t chargingTargetVoltage = 320;
+    uint16_t chargingMaxCurrent = 1;
+    if (enableCharging)
+    {
+        BMS_ConfigCharger(chargingTargetVoltage, chargingMaxCurrent, true);
+    }
+    else
+    {
+        BMS_ConfigCharger(chargingTargetVoltage, chargingMaxCurrent, false);
+    }
+
+    newDataReady = true;
+    return status;
 }
 
-BMS_StatusTypeDef BMS_LoopCharging(void)
+
+void BMS_EnableBalancing(bool enabled)
 {
-    return BMS_OK;
+    enableBalancing = enabled;
 }
 
-BMS_StatusTypeDef BMS_LoopIdle(void)
+void BMS_EnableCharging(bool enabled)
 {
-    bms_wakeupChain();
-    BMS_StatusTypeDef status;
+    enableCharging = enabled;
+}
 
-    if ((status = bms_readCellVoltage(VOLTAGE_C_FIL)))  return status; // For testing only
-    if ((status = bms_balancingMeasureVoltage()))   return status;
-
-    if ((status = bms_getAuxMeasurement())) return status; // around 40 ms
-
-    if ((status = bms29_readVB()))      return status;
-    if ((status = bms29_readCurrent())) return status;
-
-    // Only balancing if status is OK
-    if ((status = bms_checkStatus())) return status;
-    bms_startBalancing(balancingThreshold);
-
-    return BMS_OK;
+bool BMS_CheckNewDataReady(void)
+{
+    return newDataReady;
 }
 
 

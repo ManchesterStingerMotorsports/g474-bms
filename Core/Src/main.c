@@ -44,22 +44,7 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
-
 const float deltaThreshold = 0.010; // In volts
-
-
-typedef enum
-{
-    STATE_INIT,
-    STATE_ACTIVE,
-    STATE_CHARGING,
-    STATE_IDLE,
-} BmsStates;
-
-volatile BmsStates bmsState;         // Controlled by ISR
-volatile BmsStates bmsCurrState;
-volatile BmsStates bmsPrevState;
-
 
 /* USER CODE END PTD */
 
@@ -97,6 +82,7 @@ void BMS_FaultHandler(BMS_StatusTypeDef status);
 volatile uint32_t runtime_sec = 0;
 volatile uint32_t counter_commsError = 0;
 volatile uint32_t counter_commsErrorCumulative = 0;
+volatile bool initRequired = true;
 
 /* USER CODE END 0 */
 
@@ -170,63 +156,35 @@ int main(void)
     bms_softReset();
     HAL_Delay(500);         // Initialisation delay
 
+    bms_wakeupChain();
+    bms_softReset();
 
-    bmsState = STATE_INIT;
-    bmsPrevState = STATE_INIT;
-    bmsCurrState = STATE_INIT;
+    BMS_StatusTypeDef bmsStatus;
 
     while (1)
     {
-        bmsCurrState = bmsState;        // Copy value to ensure value is not changed throughout the loop
-
-        if (bmsPrevState != bmsCurrState)
-        {
-            bms_wakeupChain();
-            bms_softReset();
-            bms_init();             // Initialise BMS configs and send them
-
-            switch (bmsCurrState)
-            {
-            case STATE_ACTIVE:
-                BMS_LoopActiveInit();
-                break;
-            case STATE_IDLE:
-                BMS_LoopIdleInit();
-                break;
-            case STATE_CHARGING:
-                BMS_LoopChargingInit();
-                break;
-            default:
-                bms_stopDischarge();
-                bmsState = STATE_INIT;
-                break;
-            }
-            bmsPrevState = bmsCurrState;
-        }
-
         timeStart = getRuntimeMs();
-        BMS_StatusTypeDef status;
 
-        switch(bmsCurrState)
+        // Init BMS
+        if (initRequired == true)
         {
-        case STATE_ACTIVE:
-            status = BMS_LoopActive();
-            BMS_FaultHandler(status);
-            HAL_Delay(500);
-            break;
-
-        case STATE_IDLE:
-            status = BMS_LoopIdle();
-            BMS_FaultHandler(status);
-            HAL_Delay(2000);
-            break;
-
-        default:
-            HAL_Delay(1000);
-            break;
+            bmsStatus = bms_init();
+            if (bms_init() == BMS_OK)
+            {
+                initRequired = false;
+            }
+            else
+            {
+                BMS_FaultHandler(bmsStatus);
+                continue;
+            }
         }
 
-        if (status == BMS_OK)
+        // BMS Program Loop
+        bmsStatus = BMS_ProgramLoop();
+        BMS_FaultHandler(bmsStatus);
+
+        if (bmsStatus == BMS_OK)
         {
             // Everything is OK, so disable the fault signal
             BMS_WriteFaultSignal(false);
@@ -234,6 +192,8 @@ int main(void)
 
         timeDiff = getRuntimeMsDiff(timeStart);
         printfDma("\nRuntime: %ld ms, LoopTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
+
+        HAL_Delay(500);
 
     /* USER CODE END WHILE */
 
@@ -289,10 +249,6 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 
-
-
-
-
 /// Timer interrupt callback
 // Callback: timer has rolled over
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
@@ -307,20 +263,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         // if OK, get can data
         // send CAN messages
 
-        if (bmsCurrState != STATE_INIT)
+        if (BMS_CheckNewDataReady())
         {
-            uint16_t chargingTargetVoltage = 320;
-            uint16_t chargingMaxCurrent = 1;
-
-            if (bmsCurrState == STATE_IDLE)
-            {
-                BMS_ConfigCharger(chargingTargetVoltage, chargingMaxCurrent, true);
-            }
-            else
-            {
-                BMS_ConfigCharger(chargingTargetVoltage, chargingMaxCurrent, false);
-            }
-
             CanTxMsg *msgArr = NULL;
             uint32_t len = 0;
             BMS_GetCanData(&msgArr, &len);
@@ -346,17 +290,11 @@ uint32_t getRuntimeMsDiff(uint32_t startTime)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-    if(GPIO_Pin == B1_Pin) // If The INT Source Is EXTI Line9 (A9 Pin)
+    if (GPIO_Pin == B1_Pin) // If The INT Source Is EXTI Line9 (A9 Pin)
     {
         // Do something when button pressed
-        if (bmsCurrState == STATE_ACTIVE)
-        {
-            bmsState = STATE_IDLE;
-        }
-        else
-        {
-            bmsState = STATE_ACTIVE;
-        }
+        BMS_EnableBalancing(true);
+        BMS_EnableCharging(true);
     }
 }
 
@@ -391,16 +329,20 @@ void BMS_FaultHandler(BMS_StatusTypeDef status)
         }
         while (bms_readRegister(REG_SID) != BMS_OK);
 
-        bmsPrevState = STATE_INIT; // After comms is OK, return as if state just transitioning to the current state
+        initRequired = true; // After comms is OK, redo init
         break;
 
     case BMS_ERR_FAULT:
         bms_stopDischarge();
+        BMS_EnableBalancing(false);
+        BMS_EnableCharging(false);
         BMS_WriteFaultSignal(true);
         break;
 
     default:
         break;
+
+
     }
 }
 

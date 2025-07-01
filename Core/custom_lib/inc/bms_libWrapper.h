@@ -34,7 +34,7 @@ typedef enum {
 } RegisterTypes;
 
 
-void bms_init(void);
+BMS_StatusTypeDef bms_init(void);
 
 void bms68_setGpo45(uint8_t twoBitIndex);
 
@@ -66,13 +66,12 @@ void BMS_ConfigCharger(uint16_t targetVoltage, uint16_t maxCurrent, bool enableC
 void BMS_GetCanData(CanTxMsg** buff, uint32_t* len);
 
 
+BMS_StatusTypeDef BMS_ProgramLoop(void);
 
-// --- PROGRAM LOOP FUNCTIONS --- //
-BMS_StatusTypeDef BMS_LoopActiveInit(void);
-BMS_StatusTypeDef BMS_LoopActive(void);
-BMS_StatusTypeDef BMS_LoopChargingInit(void);
-BMS_StatusTypeDef BMS_LoopCharging(void);
-BMS_StatusTypeDef BMS_LoopIdleInit(void);
-BMS_StatusTypeDef BMS_LoopIdle(void);
+
+void BMS_EnableBalancing(bool enabled);
+void BMS_EnableCharging(bool enabled);
+bool BMS_CheckNewDataReady(void);
+
 
 

@@ -55,7 +55,6 @@ void BMS_CAN_Config(void)
         Error_Handler();
     }
 
-
     if (HAL_FDCAN_ActivateNotification(&hfdcan1, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
     {
         Error_Handler();
@@ -260,9 +259,6 @@ void BMS_CAN_GetChargerMsg(const ChargerConfiguration* config, uint8_t* data)
 }
 
 
-
-
-
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
     if (hfdcan == &hfdcan1)
@@ -280,8 +276,6 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
         }
     }
 }
-
-
 
 
 
