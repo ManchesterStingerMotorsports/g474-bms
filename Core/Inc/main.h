@@ -63,8 +63,8 @@ extern FDCAN_HandleTypeDef hfdcan2;
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
 #define TOTAL_CELL      16
-#define TOTAL_AD68      1
-#define TOTAL_AD29      0       // SHOULD ONLY BE EITHER 0 OR 1
+#define TOTAL_AD68      7
+#define TOTAL_AD29      1       // SHOULD ONLY BE EITHER 0 OR 1
 
 #define TOTAL_IC        (TOTAL_AD29 + TOTAL_AD68)
 
@@ -99,6 +99,7 @@ void Error_Handler(void);
 #define RCC_OSC_OUT_GPIO_Port GPIOF
 #define CHRGR_BTTN_Pin GPIO_PIN_0
 #define CHRGR_BTTN_GPIO_Port GPIOC
+#define CHRGR_BTTN_EXTI_IRQn EXTI0_IRQn
 #define FAULT_CTRL_Pin GPIO_PIN_1
 #define FAULT_CTRL_GPIO_Port GPIOC
 #define OC1_IT_Pin GPIO_PIN_2

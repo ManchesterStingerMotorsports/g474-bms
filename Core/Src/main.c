@@ -161,6 +161,9 @@ int main(void)
 
     BMS_StatusTypeDef bmsStatus;
 
+    BMS_EnableBalancing(false);
+    BMS_EnableCharging(false);
+
     while (1)
     {
         timeStart = getRuntimeMs();
@@ -188,12 +191,13 @@ int main(void)
         {
             // Everything is OK, so disable the fault signal
             BMS_WriteFaultSignal(false);
+            BMS_EnableBalancing(true);
         }
 
         timeDiff = getRuntimeMsDiff(timeStart);
         printfDma("\nRuntime: %ld ms, LoopTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
 
-        HAL_Delay(500);
+        HAL_Delay(900);
 
     /* USER CODE END WHILE */
 
@@ -263,7 +267,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         // if OK, get can data
         // send CAN messages
 
-        if (BMS_CheckNewDataReady())
+//        if (BMS_CheckNewDataReady())
         {
             CanTxMsg *msgArr = NULL;
             uint32_t len = 0;
@@ -272,8 +276,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         }
     }
 }
-
-
 
 
 uint32_t getRuntimeMs(void)
@@ -290,14 +292,35 @@ uint32_t getRuntimeMsDiff(uint32_t startTime)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
-    if (GPIO_Pin == B1_Pin) // If The INT Source Is EXTI Line9 (A9 Pin)
+    uint32_t currentTime = HAL_GetTick();
+
+    const uint32_t DEBOUNCE_DELAY = 500;
+    static uint32_t lastDebounceTime_B1 = 0;
+    static uint32_t lastDebounceTime_CHRGR_BTTN = 0;
+
+    switch (GPIO_Pin)
     {
-        // Do something when button pressed
-        BMS_EnableBalancing(true);
-        BMS_EnableCharging(true);
+        case B1_Pin:                // Blue onboard button (for debugging mainly)
+            // Debounce check
+            if (currentTime - lastDebounceTime_B1 < DEBOUNCE_DELAY) break;
+            lastDebounceTime_B1 = currentTime;
+            printfDma("Blue Button pressed\n");
+            break;
+
+        case CHRGR_BTTN_Pin:        // Charger Button
+            // Debounce check
+            if (currentTime - lastDebounceTime_CHRGR_BTTN < DEBOUNCE_DELAY) break;
+            lastDebounceTime_CHRGR_BTTN = currentTime;
+            printfDma("Charger Button pressed\n");
+
+            BMS_ToggleCharging();
+
+            break;
+
+        default:
+            break;
     }
 }
-
 
 
 void BMS_WriteFaultSignal(bool state)
@@ -308,6 +331,9 @@ void BMS_WriteFaultSignal(bool state)
 
 void BMS_FaultHandler(BMS_StatusTypeDef status)
 {
+    const uint32_t COMMS_RETRY_DELAY = 500;
+    const uint32_t COMMS_RETRY_TIMES = 5;
+
     switch (status)
     {
     case BMS_OK:
@@ -319,12 +345,12 @@ void BMS_FaultHandler(BMS_StatusTypeDef status)
         {
             counter_commsError++;
             counter_commsErrorCumulative++;
-            if (counter_commsError > 4)
+            if (counter_commsError > COMMS_RETRY_TIMES)
             {
                 BMS_WriteFaultSignal(true);
             }
             bms_softReset();
-            HAL_Delay(250);
+            HAL_Delay(COMMS_RETRY_DELAY);
             bms_wakeupChain();
         }
         while (bms_readRegister(REG_SID) != BMS_OK);
@@ -333,15 +359,15 @@ void BMS_FaultHandler(BMS_StatusTypeDef status)
         break;
 
     case BMS_ERR_FAULT:
-        bms_stopDischarge();
-        BMS_EnableBalancing(false);
-        BMS_EnableCharging(false);
         BMS_WriteFaultSignal(true);
         break;
 
     default:
         break;
 
+    bms_stopDischarge();
+    BMS_EnableBalancing(false);
+    BMS_EnableCharging(false);
 
     }
 }

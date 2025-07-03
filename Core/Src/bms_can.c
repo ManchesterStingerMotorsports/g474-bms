@@ -196,7 +196,6 @@ ChargerStatus chargerStatus = {0};
  * The data mapping is based on a common protocol:
  * - Bytes 0-1: Output Voltage (0.1V/bit, little-endian)
  * - Bytes 2-3: Output Current (0.1A/bit, little-endian)
- * - Byte 4: Temperature (-40°C offset)
  * - Byte 5: Status flags
  *
  * @param data can message data.
@@ -205,21 +204,18 @@ void static parse_charger_status(uint8_t* data)
 {
     // Unpack the data from the byte array.
     // Voltage (2 bytes, little-endian, 0.1V resolution)
-    uint16_t raw_voltage = (data[1] << 8) | data[0];
-    chargerStatus.output_voltage = raw_voltage * 0.1f;
+    float raw_voltage = (data[0] << 8) | data[1];
+    chargerStatus.output_voltage = raw_voltage / 10;
 
     // Current (2 bytes, little-endian, 0.1A resolution)
-    uint16_t raw_current = (data[3] << 8) | data[2];
-    chargerStatus.output_current = raw_current * 0.1f;
-
-    // Temperature (1 byte, -40 degree offset)
-    chargerStatus.temperature = (int16_t)data[4] - 40;
+    float raw_current = (data[2] << 8) | data[3];
+    chargerStatus.output_current = raw_current / 10;
 
     // Status Flags (1 byte)
-    chargerStatus.hardware_fault        = (data[5] >> 0) & 0x01;
-    chargerStatus.over_temp_fault       = (data[5] >> 1) & 0x01;
-    chargerStatus.input_voltage_fault   = (data[5] >> 2) & 0x01;
-    chargerStatus.charging_state        = (data[5] >> 3) & 0x01;
+    chargerStatus.hardware_fault        = (data[4] >> 0) & 0x01;
+    chargerStatus.over_temp_fault       = (data[4] >> 1) & 0x01;
+    chargerStatus.input_voltage_fault   = (data[4] >> 2) & 0x01;
+    chargerStatus.charging_state        = (data[4] >> 3) & 0x01;
 
     return;
 }
@@ -237,14 +233,14 @@ void static parse_charger_status(uint8_t* data)
 void BMS_CAN_GetChargerMsg(const ChargerConfiguration* config, uint8_t* data)
 {
     // Pack Target Voltage (0.1V resolution)
-    uint16_t raw_voltage = (uint16_t)(config->target_voltage / 0.1f);
-    data[0] = (uint8_t)(raw_voltage & 0xFF);         // Low byte
-    data[1] = (uint8_t)((raw_voltage >> 8) & 0xFF);  // High byte
+    uint16_t raw_voltage = (uint16_t)(config->target_voltage * 10);
+    data[0] = (uint8_t)((raw_voltage >> 8) & 0xFF);
+    data[1] = (uint8_t)((raw_voltage >> 0) & 0xFF);
 
     // Pack Max Current (0.1A resolution)
-    uint16_t raw_current = (uint16_t)(config->max_current / 0.1f);
-    data[2] = (uint8_t)(raw_current & 0xFF);         // Low byte
-    data[3] = (uint8_t)((raw_current >> 8) & 0xFF);  // High byte
+    uint16_t raw_current = (uint16_t)(config->max_current * 10);
+    data[2] = (uint8_t)((raw_current >> 8) & 0xFF);
+    data[3] = (uint8_t)((raw_current >> 0) & 0xFF);
 
     // Pack Charging Enable flag
     data[4] = config->enable_charging ? 0x01 : 0x00;
