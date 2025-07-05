@@ -383,19 +383,17 @@ void bms_startAdcvCont(bool enableRedundant)
 void bms_parseVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_IC][TOTAL_CELL], uint8_t register_index)
 {
     // Does not take care of 2950
+    // TODO: Read master register as well
 
-//    *((float*)((uint8_t*)vArr + (ic-1) * sizeof(Ic_ad68)) + c) = *((int16_t *)(rawData[ic] + (c-cell_index*3)*2)) * 0.00015 + 1.5;
-//    vArr[ic-1][c] = *((int16_t *)(rawData[ic] + (c-cell_index*3)*2)) * 0.00015 + 1.5;
+    uint8_t cell_index = (register_index * 3);
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
-        uint8_t cell_index = (register_index * 3);
-
         for (int c = cell_index; c < (cell_index + 3); c++)
         {
             vArr[ic][c] = *((int16_t *)(rawData[ic + TOTAL_AD29] + (c - cell_index)*2)) * 0.00015 + 1.5;
 
-            if (cell_index == 5)
+            if (register_index == 5) // Skip last Register since the last register only stores 1 cell
             {
                 break;
             }
@@ -1058,7 +1056,8 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
             {
                 for (int c = 0; c < TOTAL_CELL; c++)
                 {
-                    packVoltage += (ic_ad68.v_cell[dischargeVoltageType][ic][c] * 1000);
+                    int16_t test = (int16_t)(ic_ad68.v_cell[dischargeVoltageType][ic][c] * 1000.0);
+                    packVoltage += test;
                 }
             }
 
@@ -1116,6 +1115,7 @@ BMS_StatusTypeDef bms_checkStatus(void)
     const float MIN_IC_TEMP = 0;
 
     BMS_StatusTypeDef status = BMS_OK;
+    BMS_StatusTypeDef returnStatus = BMS_OK;
 
     if (TOTAL_AD29)
     {
@@ -1149,6 +1149,14 @@ BMS_StatusTypeDef bms_checkStatus(void)
             ic_common.isFaultDetected[0] = true;
             status = BMS_ERR_FAULT;
         }
+
+        if (status == BMS_OK)
+        {
+            ic_common.isFaultDetected[0] = false;
+        }
+
+        returnStatus |= status;
+        status = BMS_OK;
     }
 
     for (int ic = 0; ic < TOTAL_AD68; ic++)
@@ -1185,6 +1193,14 @@ BMS_StatusTypeDef bms_checkStatus(void)
                 BIT_SET(ic_ad68.isCellFaultDetected[ic], c);
                 status = BMS_ERR_FAULT;
             }
+
+            if (status == BMS_OK)
+            {
+                BIT_CLEAR(ic_ad68.isCellFaultDetected[ic], c);
+            }
+
+            returnStatus |= status;
+            status = BMS_OK;
         }
 
         float icVoltage = ic_ad68.v_segment[ic];
@@ -1218,10 +1234,15 @@ BMS_StatusTypeDef bms_checkStatus(void)
             status = BMS_ERR_FAULT;
         }
 
-        return status;
-    }
+        if (status == BMS_OK)
+        {
+            ic_common.isFaultDetected[ic + TOTAL_AD29] = false;
+        }
 
-    return BMS_OK;
+        returnStatus |= status;
+        status = BMS_OK;
+    }
+    return returnStatus;
 }
 
 
