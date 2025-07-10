@@ -243,7 +243,7 @@ void BMS_CAN_GetChargerMsg(const ChargerConfiguration* config, uint8_t* data)
     data[3] = (uint8_t)((raw_current >> 0) & 0xFF);
 
     // Pack Charging Enable flag
-    data[4] = config->enable_charging ? 0x01 : 0x00;
+    data[4] = config->disable_charging ? 0x01 : 0x00;
 
     // Bytes 5, 6, 7 are unused but sent as 0.
     data[5] = 0x00;

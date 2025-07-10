@@ -51,9 +51,9 @@ typedef struct {
 
 // Structure to hold the configuration we want to send to the charger.
 typedef struct {
-    float    target_voltage;    // Volts
-    float    max_current;       // Amps
-    uint8_t  enable_charging;   // 0 = Disable, 1 = Enable
+    float    target_voltage;        // Volts
+    float    max_current;           // Amps
+    uint8_t  disable_charging;      // 1 = Disable, 0 = Enable
 } ChargerConfiguration;
 
 extern ChargerStatus chargerStatus;

@@ -337,6 +337,9 @@ void BMS_FaultHandler(BMS_StatusTypeDef status)
     const uint32_t COMMS_RETRY_DELAY = 500;
     const uint32_t COMMS_RETRY_TIMES = 5;
 
+    BMS_EnableBalancing(false);
+    BMS_EnableCharging(false);
+
     switch (status)
     {
     case BMS_OK:
@@ -369,9 +372,6 @@ void BMS_FaultHandler(BMS_StatusTypeDef status)
         break;
 
     bms_stopDischarge();
-    BMS_EnableBalancing(false);
-    BMS_EnableCharging(false);
-
     }
 }
 

@@ -98,6 +98,10 @@ typedef struct
     uint16_t isDischarging          [TOTAL_AD68];         // isDischarging Flag
     uint16_t isCellFaultDetected    [TOTAL_AD68];
 
+    float v_pack_total;
+    float v_pack_min;
+    float v_pack_max;
+
 } Ic_ad68;
 
 
@@ -106,7 +110,6 @@ typedef struct
     bool isFaultDetected    [TOTAL_IC];
     bool isCommsError       [TOTAL_IC];
 } Ic_common;
-
 
 Ic_common   ic_common;
 Ic_ad29     ic_ad29;
@@ -122,11 +125,21 @@ VoltageTypes dischargeVoltageType = VOLTAGE_S;
 #define CAN_BUFFER_LEN (7 * 16 + 64)                // TODO: Calculate accurate buffer size
 CanTxMsg canTxBuffer[CAN_BUFFER_LEN] = {0};
 
-const float balancingThreshold = 0.010; // Volts
+ChargerConfiguration chargerConfig = {
+        .max_current = 1,
+        .target_voltage = 450,
+        .disable_charging = 1,
+};
+
+static const float balancingThreshold = 0.010; // Volts
+
+static const bool DEBUG_SERIAL_VOLTAGE_ENABLED = true;
+static const bool DEBUG_SERIAL_AUX_ENABLED = true;
+
 
 volatile bool enableBalancing = false;
-volatile bool enableCharging = false;
 volatile bool newDataReady = false;
+
 
 
 void bms_resetConfig(void)
@@ -439,15 +452,21 @@ void bms_parseAuxVoltage(uint8_t const rawData[TOTAL_IC][DATA_LEN], float vArr[T
 
 void bms_calculateStats(VoltageTypes voltageType)
 {
+    float total_voltage = 0;
+    float pack_min =  999.0;
+    float pack_max = -999.0;
+
     for (int ic = 0; ic < TOTAL_AD68; ic++)
     {
-        float min = 999.0;
+        float min =  999.0;
         float max = -999.0;
         float sum = 0;
 
         for (int c = 0; c < TOTAL_CELL; c++)
         {
             float voltage = ic_ad68.v_cell[voltageType][ic][c];
+
+            total_voltage += sum;
             sum += voltage;
             if (voltage > max)
             {
@@ -456,6 +475,14 @@ void bms_calculateStats(VoltageTypes voltageType)
             if (voltage < min)
             {
                 min = voltage;
+            }
+            if (voltage > pack_max)
+            {
+                pack_max = voltage;
+            }
+            if (voltage < pack_min)
+            {
+                pack_min = voltage;
             }
         }
 
@@ -468,6 +495,19 @@ void bms_calculateStats(VoltageTypes voltageType)
         for (int c = 0; c < TOTAL_CELL; c++)
         {
             ic_ad68.v_cell_diff[voltageType][ic][c] = ic_ad68.v_cell[voltageType][ic][c] - min;
+        }
+    }
+
+    ic_ad68.v_pack_total = total_voltage;
+    ic_ad68.v_pack_min = pack_min;
+    ic_ad68.v_pack_max = pack_max;
+
+    // Calculate voltage diff from the lowest voltage cell
+    for (int ic = 0; ic < TOTAL_AD68; ic++)
+    {
+        for (int c = 0; c < TOTAL_CELL; c++)
+        {
+            ic_ad68.v_cell_diff[voltageType][ic][c] = ic_ad68.v_cell[voltageType][ic][c] - pack_min;
         }
     }
 }
@@ -579,7 +619,8 @@ BMS_StatusTypeDef bms_readCellVoltage(VoltageTypes voltageType)
     }
 
     bms_calculateStats(voltageType);
-    bms_printVoltage(voltageType);
+
+    if (DEBUG_SERIAL_VOLTAGE_ENABLED) bms_printVoltage(voltageType);
 
     return BMS_OK;
 }
@@ -657,7 +698,7 @@ BMS_StatusTypeDef bms_getAuxMeasurement(void)
     ADAX.CH4  = 0b0;
     ADAX.PUP  = 0b0;
 
-    //    bms_startTimer();
+//    bms_startTimer();
 //    bms_wakeupChain();
 
     bms_transmitCmd((uint8_t *)&ADAX);
@@ -679,8 +720,8 @@ BMS_StatusTypeDef bms_getAuxMeasurement(void)
 
     bms_parseTemps();
     bms_calculateStats(VOLTAGE_TEMP);
-    bms_printVoltage(VOLTAGE_TEMP);
-    bms_printTemps();
+    if (DEBUG_SERIAL_VOLTAGE_ENABLED)   bms_printVoltage(VOLTAGE_TEMP);
+    if (DEBUG_SERIAL_AUX_ENABLED)      bms_printTemps();
 
 //    uint32_t time = bms_getTimCount();
 //    bms_stopTimer();
@@ -757,23 +798,8 @@ void bms_setPwm(uint8_t ic_index, uint8_t cell, uint8_t dutyCycle)
  */
 float bms_calculateBalancing(float deltaThreshold)
 {
-    float min = 999.0;
-    float max = -999.0;
-
-    for (int ic = 0; ic < TOTAL_AD68; ic++)
-    {
-        float segment_min = ic_ad68.v_cell_min[dischargeVoltageType][ic];
-        float segment_max = ic_ad68.v_cell_max[dischargeVoltageType][ic];
-
-        if (segment_min < min)
-        {
-            min = segment_min;
-        }
-        if (segment_max > max)
-        {
-            max = segment_max;
-        }
-    }
+    float min = ic_ad68.v_pack_min;
+    float max = ic_ad68.v_pack_max;
 
     if (max - min > deltaThreshold)
     {
@@ -962,16 +988,6 @@ void bms_startBalancing(float deltaThreshold)
 }
 
 
-ChargerConfiguration chargerConfiguration;
-void BMS_ConfigCharger(uint16_t targetVoltage, uint16_t maxCurrent, bool enableCharging)
-{
-    // Charger Commands
-    chargerConfiguration.target_voltage = targetVoltage;
-    chargerConfiguration.max_current = maxCurrent;
-    chargerConfiguration.enable_charging = enableCharging;
-}
-
-
 void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
 {
     uint32_t bufferlen = 0;
@@ -1050,16 +1066,7 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
             int16_t packVoltage     = (ic_ad29.vb1 + ic_ad29.vb2) * 10 / 2;
             int16_t packCurrent     = (int16_t)(((ic_ad29.current1 + ic_ad29.current2) * 100.0f) / 2.0f);
 
-            // Adds all voltages up instead of getting from the master
-            uint32_t voltageSum = 0;
-            for (int ic = 0; ic < TOTAL_AD68; ic++)
-            {
-                for (int c = 0; c < TOTAL_CELL; c++)
-                {
-                    voltageSum += (ic_ad68.v_cell[dischargeVoltageType][ic][c] * 1000 * 1000);
-                }
-            }
-            packVoltage = voltageSum * 0.001 * 0.001 * 10;
+            packVoltage = ic_ad68.v_pack_total * 10; // overwrite the packvoltage measurement from master
 
             canTxBuffer[bufferlen].data[0] = (packVoltage >> 0)  & 0xFF;
             canTxBuffer[bufferlen].data[1] = (packVoltage >> 8)  & 0xFF;
@@ -1074,13 +1081,10 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
     }
 
     // --- CHARGER CONFIG CAN MESSAGE --- //
-    if (enableCharging)
-    {
-        BMS_CAN_GetChargerMsg(&chargerConfiguration, canTxBuffer[bufferlen].data);
-        txHeader.Identifier = CHARGER_CONFIG_CAN_ID;
-        canTxBuffer[bufferlen].header = txHeader;
-        bufferlen++;
-    }
+    BMS_CAN_GetChargerMsg(&chargerConfig, canTxBuffer[bufferlen].data);
+    txHeader.Identifier = CHARGER_CONFIG_CAN_ID;
+    canTxBuffer[bufferlen].header = txHeader;
+    bufferlen++;
 
     *len = bufferlen;
     *buff = canTxBuffer;
@@ -1117,7 +1121,8 @@ BMS_StatusTypeDef bms_checkStatus(void)
 
     if (TOTAL_AD29)
     {
-        float packVoltage = ic_ad29.vb1;        // TODO: Figure out how to combine 2 values
+//        float packVoltage = ic_ad29.vb1;        // TODO: Figure out how to combine 2 values
+        float packVoltage = ic_ad68.v_pack_total;
         float packCurrent = ic_ad29.current1;
 
         if (packVoltage > MAX_PACK_VOLTAGE)
@@ -1247,9 +1252,9 @@ BMS_StatusTypeDef bms_checkStatus(void)
 
 BMS_StatusTypeDef BMS_ProgramLoop(void)
 {
-    bms_wakeupChain();
     BMS_StatusTypeDef status;
-    if ((status = bms_readCellVoltage(VOLTAGE_C_FIL)))  return status;
+//    bms_wakeupChain();
+//    if ((status = bms_readCellVoltage(VOLTAGE_C_FIL)))  return status;
     bms_wakeupChain();
     if ((status = bms_getAuxMeasurement())) return status; // around 40 ms
 
@@ -1263,21 +1268,10 @@ BMS_StatusTypeDef BMS_ProgramLoop(void)
     // Only balancing/charging if status is OK
     status = bms_checkStatus();  // Comment to bypass status check
 
-    bms_wakeupChain();
     if (enableBalancing && (status == BMS_OK))
     {
+        bms_wakeupChain();
         bms_startBalancing(balancingThreshold);
-    }
-
-    uint16_t chargingTargetVoltage = 450;
-    uint16_t chargingMaxCurrent = 7;
-    if (enableCharging)
-    {
-        BMS_ConfigCharger(chargingTargetVoltage, chargingMaxCurrent, true);
-    }
-    else
-    {
-        BMS_ConfigCharger(chargingTargetVoltage, chargingMaxCurrent, false);
     }
 
     bms_wakeupChain();
@@ -1293,8 +1287,9 @@ void BMS_EnableBalancing(bool enabled)
 
 void BMS_EnableCharging(bool enabled)
 {
-    enableCharging = enabled;
-    char *state = (enableCharging)? "Enabled" : "Disabled";
+    chargerConfig.disable_charging = !enabled;   // Inverted logic because config is disable = 1
+
+    char *state = (chargerConfig.disable_charging)? "Disabled" : "Enabled";
     printfDma("Charger Status: %s\n", state);
 }
 
@@ -1303,15 +1298,12 @@ void BMS_ToggleBalancing(void)
     enableBalancing = !enableBalancing;
 }
 
-void BMS_ToggleCharging(void)
-{
-    bool toggle = !enableCharging;
-    BMS_EnableCharging(toggle);
-}
 
 void BMS_ChargingButtonLogic(void)
 {
-    if (enableCharging)
+    bool chargerEnabled = !chargerConfig.disable_charging;
+
+    if (chargerEnabled)
     {
         BMS_EnableCharging(false);
         return;
@@ -1326,6 +1318,10 @@ void BMS_ChargingButtonLogic(void)
     if (statusOK)
     {
         BMS_EnableCharging(true);
+    }
+    else
+    {
+        printfDma("Charger NOT OK to start Charging \n");
     }
 }
 

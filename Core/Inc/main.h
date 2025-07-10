@@ -73,7 +73,6 @@ extern FDCAN_HandleTypeDef hfdcan2;
 #define BIT_CHECK(byte,nbit) ((byte) &   (UINT32_C(1) << (nbit)))
 #define BIT_FLIP(byte,nbit)  ((byte) ^=  (UINT32_C(1) << (nbit)))
 
-
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
