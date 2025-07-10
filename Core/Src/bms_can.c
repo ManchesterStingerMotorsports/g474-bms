@@ -13,7 +13,7 @@
 FDCAN_TxHeaderTypeDef TxHeader;
 
 
-#define BUFFER_LEN (7 * 16 + 32)       // TODO: Accurate buffer size
+#define BUFFER_LEN (7 * 16 + 64)       // TODO: Accurate buffer size
 CanTxMsg txBuffer[BUFFER_LEN];
 volatile uint32_t txBufferHeadIndex = 0;
 volatile uint32_t txBufferTailIndex = 0;

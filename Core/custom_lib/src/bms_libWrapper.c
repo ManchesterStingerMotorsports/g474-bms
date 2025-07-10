@@ -119,7 +119,7 @@ uint8_t  rxCc[TOTAL_IC];
 
 VoltageTypes dischargeVoltageType = VOLTAGE_S;
 
-#define CAN_BUFFER_LEN (7 * 16 + 32)                // TODO: Calculate accurate buffer size
+#define CAN_BUFFER_LEN (7 * 16 + 64)                // TODO: Calculate accurate buffer size
 CanTxMsg canTxBuffer[CAN_BUFFER_LEN] = {0};
 
 const float balancingThreshold = 0.010; // Volts
@@ -917,8 +917,8 @@ BMS_StatusTypeDef bms29_readCurrent(void)
 
         const float SHUNT_RESISTANCE = 0.000050; // 50 microOhms
 
-        ic_ad29.current1 = ((float)i1v / 1000000.0f) / SHUNT_RESISTANCE;
-        ic_ad29.current2 = ((float)i2v / 1000000.0f) / SHUNT_RESISTANCE;
+        ic_ad29.current1 = ((float)i1v / -1000000.0f) / SHUNT_RESISTANCE;
+        ic_ad29.current2 = ((float)i2v /  1000000.0f) / SHUNT_RESISTANCE;
 
         printfDma("Current: %fA, %fA  \n", ic_ad29.current1 , ic_ad29.current2);
     }
@@ -1047,27 +1047,25 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
 
         if (!isCommsError)
         {
-            int32_t packVoltage     = (ic_ad29.vb1 + ic_ad29.vb2) * 1000 / 2;
-            int16_t packCurrent     = (ic_ad29.current1 + ic_ad29.current2) * 100 / 2;
+            int16_t packVoltage     = (ic_ad29.vb1 + ic_ad29.vb2) * 10 / 2;
+            int16_t packCurrent     = (int16_t)(((ic_ad29.current1 + ic_ad29.current2) * 100.0f) / 2.0f);
 
             // Adds all voltages up instead of getting from the master
-            packVoltage = 0;
+            uint32_t voltageSum = 0;
             for (int ic = 0; ic < TOTAL_AD68; ic++)
             {
                 for (int c = 0; c < TOTAL_CELL; c++)
                 {
-                    int16_t test = (int16_t)(ic_ad68.v_cell[dischargeVoltageType][ic][c] * 1000.0);
-                    packVoltage += test;
+                    voltageSum += (ic_ad68.v_cell[dischargeVoltageType][ic][c] * 1000 * 1000);
                 }
             }
+            packVoltage = voltageSum * 0.001 * 0.001 * 10;
 
             canTxBuffer[bufferlen].data[0] = (packVoltage >> 0)  & 0xFF;
             canTxBuffer[bufferlen].data[1] = (packVoltage >> 8)  & 0xFF;
-            canTxBuffer[bufferlen].data[2] = (packVoltage >> 16) & 0xFF;
-            canTxBuffer[bufferlen].data[3] = (packVoltage >> 24) & 0xFF;
 
-            canTxBuffer[bufferlen].data[4] = (packCurrent >> 0)  & 0xFF;
-            canTxBuffer[bufferlen].data[5] = (packCurrent >> 8)  & 0xFF;
+            canTxBuffer[bufferlen].data[2] = (packCurrent >> 0)  & 0xFF;
+            canTxBuffer[bufferlen].data[3] = (packCurrent >> 8)  & 0xFF;
 
             txHeader.Identifier = BASE_CAN_ID + 7*TOTAL_CELL + 7;
             canTxBuffer[bufferlen].header = txHeader;
@@ -1263,7 +1261,7 @@ BMS_StatusTypeDef BMS_ProgramLoop(void)
     if ((status = bms_balancingMeasureVoltage()))       return status;
 
     // Only balancing/charging if status is OK
-    status = bms_checkStatus();
+    status = bms_checkStatus();  // Comment to bypass status check
 
     bms_wakeupChain();
     if (enableBalancing && (status == BMS_OK))
@@ -1271,8 +1269,8 @@ BMS_StatusTypeDef BMS_ProgramLoop(void)
         bms_startBalancing(balancingThreshold);
     }
 
-    uint16_t chargingTargetVoltage = 320;
-    uint16_t chargingMaxCurrent = 1;
+    uint16_t chargingTargetVoltage = 450;
+    uint16_t chargingMaxCurrent = 7;
     if (enableCharging)
     {
         BMS_ConfigCharger(chargingTargetVoltage, chargingMaxCurrent, true);
@@ -1296,6 +1294,8 @@ void BMS_EnableBalancing(bool enabled)
 void BMS_EnableCharging(bool enabled)
 {
     enableCharging = enabled;
+    char *state = (enableCharging)? "Enabled" : "Disabled";
+    printfDma("Charger Status: %s\n", state);
 }
 
 void BMS_ToggleBalancing(void)
@@ -1305,8 +1305,28 @@ void BMS_ToggleBalancing(void)
 
 void BMS_ToggleCharging(void)
 {
-    enableCharging = !enableCharging;
-    printfDma("Charger Status: &d\n", enableCharging);
+    bool toggle = !enableCharging;
+    BMS_EnableCharging(toggle);
+}
+
+void BMS_ChargingButtonLogic(void)
+{
+    if (enableCharging)
+    {
+        BMS_EnableCharging(false);
+        return;
+    }
+
+    bool statusOK = true;
+    if (chargerStatus.hardware_fault != false)      statusOK = false;
+    if (chargerStatus.over_temp_fault != false)     statusOK = false;
+    if (chargerStatus.input_voltage_fault != false) statusOK = false;
+    if (chargerStatus.output_voltage < 300.0f)      statusOK = false;
+
+    if (statusOK)
+    {
+        BMS_EnableCharging(true);
+    }
 }
 
 bool BMS_CheckNewDataReady(void)

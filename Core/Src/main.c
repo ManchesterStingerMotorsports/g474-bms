@@ -311,9 +311,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
             // Debounce check
             if (currentTime - lastDebounceTime_CHRGR_BTTN < DEBOUNCE_DELAY) break;
             lastDebounceTime_CHRGR_BTTN = currentTime;
+
             printfDma("Charger Button pressed\n");
 
-            BMS_ToggleCharging();
+            // Check for charger status and enables charging
+            // or disables charger if charging is enabled
+            BMS_ChargingButtonLogic();
 
             break;
 

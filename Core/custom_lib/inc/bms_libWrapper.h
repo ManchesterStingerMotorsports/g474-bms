@@ -73,6 +73,7 @@ void BMS_EnableBalancing(bool enabled);
 void BMS_EnableCharging(bool enabled);
 void BMS_ToggleBalancing(void);
 void BMS_ToggleCharging(void);
+void BMS_ChargingButtonLogic(void);
 bool BMS_CheckNewDataReady(void);
 
 
