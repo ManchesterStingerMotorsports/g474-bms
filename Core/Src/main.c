@@ -79,10 +79,20 @@ void BMS_FaultHandler(BMS_StatusTypeDef status);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-volatile uint32_t runtime_sec = 0;
-volatile uint32_t counter_commsError = 0;
-volatile uint32_t counter_commsErrorCumulative = 0;
+typedef struct {
+    volatile uint32_t runtime_sec;
+    volatile uint32_t counter_commsError;
+    volatile uint32_t counter_commsErrorCumulative;
+
+    volatile uint32_t time_voltageFaultStart;
+    volatile uint32_t time_tempFaultStart;
+} ProgramStats;
+
+ProgramStats programStats = {0};
+
 volatile bool initRequired = true;
+
+const uint32_t MAIN_LOOP_DELAY = 100;
 
 /* USER CODE END 0 */
 
@@ -185,11 +195,13 @@ int main(void)
 
         // BMS Program Loop
         bmsStatus = BMS_ProgramLoop();
-        BMS_FaultHandler(bmsStatus);
-
-        if (bmsStatus == BMS_OK)
+        if (bmsStatus != BMS_OK)
         {
-            // Everything is OK, so disable the fault signal
+            BMS_FaultHandler(bmsStatus);
+        }
+        else
+        {
+            // Everything is OK, so disable the fault signal and enable balancing
             BMS_WriteFaultSignal(false);
             BMS_EnableBalancing(true);
         }
@@ -197,7 +209,7 @@ int main(void)
         timeDiff = getRuntimeMsDiff(timeStart);
         printfDma("\nRuntime: %ld ms, LoopTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
 
-        HAL_Delay(900);
+        HAL_Delay(MAIN_LOOP_DELAY);
 
     /* USER CODE END WHILE */
 
@@ -260,7 +272,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     // Check which version of the timer triggered this callback and toggle LED
     if (htim == &htim16) // This is triggered every second
     {
-        runtime_sec += 1;
+        programStats.runtime_sec += 1;
         // check CAN status
         // check for faults
         // check for bms status
@@ -342,16 +354,13 @@ void BMS_FaultHandler(BMS_StatusTypeDef status)
 
     switch (status)
     {
-    case BMS_OK:
-        break;
-
     case BMS_ERR_COMMS:
-        counter_commsError = 0;
+        programStats.counter_commsError = 0;
         do
         {
-            counter_commsError++;
-            counter_commsErrorCumulative++;
-            if (counter_commsError > COMMS_RETRY_TIMES)
+            programStats.counter_commsError++;
+            programStats.counter_commsErrorCumulative++;
+            if (programStats.counter_commsError > COMMS_RETRY_TIMES)
             {
                 BMS_WriteFaultSignal(true);
             }

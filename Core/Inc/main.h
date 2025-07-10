@@ -41,9 +41,11 @@ extern "C" {
 /* USER CODE BEGIN ET */
 
 typedef enum {
-    BMS_OK = 0,
-    BMS_ERR_COMMS = -1,
-    BMS_ERR_FAULT = 1,
+    BMS_OK          = 0x00,
+    BMS_ERR_COMMS   = -1,
+//    BMS_ERR_VOLTAGE = 0x01,
+//    BMS_ERR_TEMP    = 0x02,
+    BMS_ERR_FAULT = 0x04,
 } BMS_StatusTypeDef;
 
 

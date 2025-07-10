@@ -98,10 +98,6 @@ typedef struct
     uint16_t isDischarging          [TOTAL_AD68];         // isDischarging Flag
     uint16_t isCellFaultDetected    [TOTAL_AD68];
 
-    float v_pack_total;
-    float v_pack_min;
-    float v_pack_max;
-
 } Ic_ad68;
 
 
@@ -109,6 +105,11 @@ typedef struct
 {
     bool isFaultDetected    [TOTAL_IC];
     bool isCommsError       [TOTAL_IC];
+
+    // Pack status
+    float v_pack_total;
+    float v_pack_min;
+    float v_pack_max;
 } Ic_common;
 
 Ic_common   ic_common;
@@ -133,8 +134,8 @@ ChargerConfiguration chargerConfig = {
 
 static const float balancingThreshold = 0.010; // Volts
 
-static const bool DEBUG_SERIAL_VOLTAGE_ENABLED = true;
-static const bool DEBUG_SERIAL_AUX_ENABLED = true;
+static const bool DEBUG_SERIAL_VOLTAGE_ENABLED = false;
+static const bool DEBUG_SERIAL_AUX_ENABLED = false;
 
 
 volatile bool enableBalancing = false;
@@ -465,8 +466,6 @@ void bms_calculateStats(VoltageTypes voltageType)
         for (int c = 0; c < TOTAL_CELL; c++)
         {
             float voltage = ic_ad68.v_cell[voltageType][ic][c];
-
-            total_voltage += sum;
             sum += voltage;
             if (voltage > max)
             {
@@ -486,6 +485,7 @@ void bms_calculateStats(VoltageTypes voltageType)
             }
         }
 
+        total_voltage += sum;
         ic_ad68.v_cell_min  [voltageType][ic] = min;
         ic_ad68.v_cell_max  [voltageType][ic] = max;
         ic_ad68.v_cell_sum  [voltageType][ic] = sum;
@@ -498,9 +498,12 @@ void bms_calculateStats(VoltageTypes voltageType)
         }
     }
 
-    ic_ad68.v_pack_total = total_voltage;
-    ic_ad68.v_pack_min = pack_min;
-    ic_ad68.v_pack_max = pack_max;
+    if (voltageType == dischargeVoltageType)
+    {
+        ic_common.v_pack_total = total_voltage;
+        ic_common.v_pack_min = pack_min;
+        ic_common.v_pack_max = pack_max;
+    }
 
     // Calculate voltage diff from the lowest voltage cell
     for (int ic = 0; ic < TOTAL_AD68; ic++)
@@ -798,8 +801,8 @@ void bms_setPwm(uint8_t ic_index, uint8_t cell, uint8_t dutyCycle)
  */
 float bms_calculateBalancing(float deltaThreshold)
 {
-    float min = ic_ad68.v_pack_min;
-    float max = ic_ad68.v_pack_max;
+    float min = ic_common.v_pack_min;
+    float max = ic_common.v_pack_max;
 
     if (max - min > deltaThreshold)
     {
@@ -830,6 +833,8 @@ void bms_startDischarge(float dischargeThreshold)
                 cellDischargeCount++;
             }
         }
+
+        if (cellDischargeCount == 0) {cellDischargeCount = 1; };
 
         dutyCycle = maxDischarge / cellDischargeCount;
         if (dutyCycle > 0b1111)
@@ -1066,7 +1071,7 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len)
             int16_t packVoltage     = (ic_ad29.vb1 + ic_ad29.vb2) * 10 / 2;
             int16_t packCurrent     = (int16_t)(((ic_ad29.current1 + ic_ad29.current2) * 100.0f) / 2.0f);
 
-            packVoltage = ic_ad68.v_pack_total * 10; // overwrite the packvoltage measurement from master
+            packVoltage = ic_common.v_pack_total * 10; // overwrite the packvoltage measurement from master
 
             canTxBuffer[bufferlen].data[0] = (packVoltage >> 0)  & 0xFF;
             canTxBuffer[bufferlen].data[1] = (packVoltage >> 8)  & 0xFF;
@@ -1122,7 +1127,7 @@ BMS_StatusTypeDef bms_checkStatus(void)
     if (TOTAL_AD29)
     {
 //        float packVoltage = ic_ad29.vb1;        // TODO: Figure out how to combine 2 values
-        float packVoltage = ic_ad68.v_pack_total;
+        float packVoltage = ic_common.v_pack_total;
         float packCurrent = ic_ad29.current1;
 
         if (packVoltage > MAX_PACK_VOLTAGE)
@@ -1266,7 +1271,8 @@ BMS_StatusTypeDef BMS_ProgramLoop(void)
     if ((status = bms_balancingMeasureVoltage()))       return status;
 
     // Only balancing/charging if status is OK
-    status = bms_checkStatus();  // Comment to bypass status check
+    status = bms_checkStatus();
+//    status = BMS_OK;              // Uncomment to bypass status check
 
     if (enableBalancing && (status == BMS_OK))
     {
