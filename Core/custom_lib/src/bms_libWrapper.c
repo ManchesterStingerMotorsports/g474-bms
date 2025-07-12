@@ -132,10 +132,11 @@ ChargerConfiguration chargerConfig = {
         .disable_charging = 1,
 };
 
-static const float balancingThreshold = 0.010; // Volts
+static const float balancingThreshold = 0.030; // Volts
 
 static const bool DEBUG_SERIAL_VOLTAGE_ENABLED = false;
 static const bool DEBUG_SERIAL_AUX_ENABLED = false;
+static const bool DEBUG_SERIAL_MASTER_MEASUREMENTS = false;
 
 
 volatile bool enableBalancing = false;
@@ -914,11 +915,17 @@ BMS_StatusTypeDef bms29_readVB(void)
 
         ic_ad29.vb1 = *((int16_t *)(rxData[0] + 2)) *  0.000100 * 396.604395604;
         ic_ad29.vb2 = *((int16_t *)(rxData[0] + 4)) * -0.000085 * 751;
-        printfDma("Pack Voltage: %fV, %fV  \n", ic_ad29.vb1, ic_ad29.vb2);
+        if (DEBUG_SERIAL_MASTER_MEASUREMENTS)
+        {
+            printfDma("Pack Voltage: %fV, %fV  \n", ic_ad29.vb1, ic_ad29.vb2);
+        }
     }
     else
     {
-        printfDma("Pack Voltage: (AD29 Disabled!) \n");
+        if (DEBUG_SERIAL_MASTER_MEASUREMENTS)
+        {
+            printfDma("Pack Voltage: (AD29 Disabled!) \n");
+        }
     }
     return BMS_OK;
 }
@@ -950,12 +957,17 @@ BMS_StatusTypeDef bms29_readCurrent(void)
 
         ic_ad29.current1 = ((float)i1v / -1000000.0f) / SHUNT_RESISTANCE;
         ic_ad29.current2 = ((float)i2v /  1000000.0f) / SHUNT_RESISTANCE;
-
-        printfDma("Current: %fA, %fA  \n", ic_ad29.current1 , ic_ad29.current2);
+        if (DEBUG_SERIAL_MASTER_MEASUREMENTS)
+        {
+            printfDma("Current: %fA, %fA  \n", ic_ad29.current1 , ic_ad29.current2);
+        }
     }
     else
     {
-        printfDma("Current: (AD29 Disabled!) \n");
+        if (DEBUG_SERIAL_MASTER_MEASUREMENTS)
+        {
+            printfDma("Current: (AD29 Disabled!) \n");
+        }
     }
     return BMS_OK;
 }
@@ -1271,7 +1283,7 @@ BMS_StatusTypeDef BMS_ProgramLoop(void)
     if ((status = bms_balancingMeasureVoltage()))       return status;
 
     // Only balancing/charging if status is OK
-    status = bms_checkStatus();
+//    status = bms_checkStatus();
 //    status = BMS_OK;              // Uncomment to bypass status check
 
     if (enableBalancing && (status == BMS_OK))
@@ -1286,10 +1298,13 @@ BMS_StatusTypeDef BMS_ProgramLoop(void)
 }
 
 
-void BMS_EnableBalancing(bool enabled)
+
+
+bool BMS_IsCharging(void)
 {
-    enableBalancing = enabled;
+    return !chargerConfig.disable_charging;
 }
+
 
 void BMS_EnableCharging(bool enabled)
 {
@@ -1305,6 +1320,12 @@ void BMS_ToggleBalancing(void)
 }
 
 
+void BMS_EnableBalancing(bool enabled)
+{
+    enableBalancing = enabled;
+}
+
+
 void BMS_ChargingButtonLogic(void)
 {
     bool chargerEnabled = !chargerConfig.disable_charging;
@@ -1316,10 +1337,11 @@ void BMS_ChargingButtonLogic(void)
     }
 
     bool statusOK = true;
-    if (chargerStatus.hardware_fault != false)      statusOK = false;
-    if (chargerStatus.over_temp_fault != false)     statusOK = false;
-    if (chargerStatus.input_voltage_fault != false) statusOK = false;
-    if (chargerStatus.output_voltage < 300.0f)      statusOK = false;
+    if (!HAL_GPIO_ReadPin(SDC_IN_GPIO_Port, SDC_IN_Pin)) statusOK = false;  // SDC is not connected
+//    if (chargerStatus.hardware_fault != false)      statusOK = false;
+//    if (chargerStatus.over_temp_fault != false)     statusOK = false;
+//    if (chargerStatus.input_voltage_fault != false) statusOK = false;
+//    if (chargerStatus.output_voltage < 300.0f)      statusOK = false;
 
     if (statusOK)
     {

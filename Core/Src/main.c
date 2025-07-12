@@ -92,7 +92,9 @@ ProgramStats programStats = {0};
 
 volatile bool initRequired = true;
 
-const uint32_t MAIN_LOOP_DELAY = 100;
+const uint32_t MAIN_LOOP_DELAY = 500;
+
+static const bool DEBUG_SERIAL_LOOP_TIME = false;
 
 /* USER CODE END 0 */
 
@@ -206,8 +208,19 @@ int main(void)
             BMS_EnableBalancing(true);
         }
 
+        // If charging and SDC is disconnected (LOW)
+        if (BMS_IsCharging() && !HAL_GPIO_ReadPin(SDC_IN_GPIO_Port, SDC_IN_Pin))
+        {
+            printfDma("SDC Disconnected, Disabling Charging");
+            BMS_EnableCharging(false);
+        }
+
+
         timeDiff = getRuntimeMsDiff(timeStart);
-        printfDma("\nRuntime: %ld ms, LoopTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
+        if (DEBUG_SERIAL_LOOP_TIME)
+        {
+            printfDma("\nRuntime: %ld ms, LoopTime: %ld ms \n\n", getRuntimeMs(), timeDiff);
+        }
 
         HAL_Delay(MAIN_LOOP_DELAY);
 

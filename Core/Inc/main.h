@@ -43,8 +43,8 @@ extern "C" {
 typedef enum {
     BMS_OK          = 0x00,
     BMS_ERR_COMMS   = -1,
-//    BMS_ERR_VOLTAGE = 0x01,
-//    BMS_ERR_TEMP    = 0x02,
+    BMS_ERR_VOLTAGE = 0x01,
+    BMS_ERR_TEMP    = 0x02,
     BMS_ERR_FAULT = 0x04,
 } BMS_StatusTypeDef;
 
@@ -64,8 +64,8 @@ extern FDCAN_HandleTypeDef hfdcan2;
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-#define TOTAL_CELL      16
-#define TOTAL_AD68      1
+#define TOTAL_CELL      16      // VALUES OTHER THAN 16 IS NOT PROPERLY HANDLED
+#define TOTAL_AD68      0
 #define TOTAL_AD29      1       // SHOULD ONLY BE EITHER 0 OR 1
 
 #define TOTAL_IC        (TOTAL_AD29 + TOTAL_AD68)
@@ -103,8 +103,8 @@ void Error_Handler(void);
 #define CHRGR_BTTN_EXTI_IRQn EXTI0_IRQn
 #define FAULT_CTRL_Pin GPIO_PIN_1
 #define FAULT_CTRL_GPIO_Port GPIOC
-#define OC1_IT_Pin GPIO_PIN_2
-#define OC1_IT_GPIO_Port GPIOC
+#define SDC_IN_Pin GPIO_PIN_2
+#define SDC_IN_GPIO_Port GPIOC
 #define OC2_IT_Pin GPIO_PIN_3
 #define OC2_IT_GPIO_Port GPIOC
 #define LPUART1_TX_Pin GPIO_PIN_2

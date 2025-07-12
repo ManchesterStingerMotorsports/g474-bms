@@ -65,11 +65,13 @@ void BMS_GetCanData(CanTxMsg** buff, uint32_t* len);
 
 BMS_StatusTypeDef BMS_ProgramLoop(void);
 
+void BMS_EnableCharging(bool enabled);
+void BMS_ChargingButtonLogic(void);
+bool BMS_IsCharging(void);
 
 void BMS_EnableBalancing(bool enabled);
-void BMS_EnableCharging(bool enabled);
 void BMS_ToggleBalancing(void);
-void BMS_ChargingButtonLogic(void);
+
 bool BMS_CheckNewDataReady(void);
 
 
