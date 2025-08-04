@@ -64,7 +64,7 @@ extern FDCAN_HandleTypeDef hfdcan2;
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-#define TOTAL_CELL      16      // VALUES OTHER THAN 16 IS NOT PROPERLY HANDLED
+#define TOTAL_CELL      16
 #define TOTAL_AD68      1
 #define TOTAL_AD29      1       // SHOULD ONLY BE EITHER 0 OR 1
 

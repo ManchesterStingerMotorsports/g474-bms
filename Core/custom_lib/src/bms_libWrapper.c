@@ -396,7 +396,6 @@ void bms_startAdcvCont(bool enableRedundant)
 
 void bms_parseVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_IC][TOTAL_CELL], uint8_t register_index)
 {
-    // Does not take care of 2950
     // TODO: Read master register as well
 
     uint8_t cell_index = (register_index * 3);
@@ -405,6 +404,11 @@ void bms_parseVoltage(uint8_t rawData[TOTAL_IC][DATA_LEN], float vArr[TOTAL_IC][
     {
         for (int c = cell_index; c < (cell_index + 3); c++)
         {
+            // Don't read cells out of range
+            if (c >= TOTAL_CELL) {
+                break;
+            }
+
             vArr[ic][c] = *((int16_t *)(rawData[ic + TOTAL_AD29] + (c - cell_index)*2)) * 0.00015 + 1.5;
 
             if (register_index == 5) // Skip last Register since the last register only stores 1 cell
